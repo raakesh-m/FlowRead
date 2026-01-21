@@ -1,0 +1,547 @@
+// PreferencesView.swift
+// FlowRead - Modern preferences/settings view
+
+import SwiftUI
+
+struct PreferencesView: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var selectedTab = 0
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with gradient
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Preferences")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.textPrimary)
+                    
+                    Text("Customize your reading experience")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.textTertiary)
+                }
+                
+                Spacer()
+                
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.textSecondary, .textTertiary],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.137, green: 0.165, blue: 0.220),
+                        Color(red: 0.118, green: 0.141, blue: 0.188)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            
+            // Tab picker with modern styling
+            HStack(spacing: 8) {
+                TabButton(title: "General", icon: "gearshape", isSelected: selectedTab == 0) {
+                    withAnimation(.spring(response: 0.3)) { selectedTab = 0 }
+                }
+                
+                TabButton(title: "API Keys", icon: "key.fill", isSelected: selectedTab == 1) {
+                    withAnimation(.spring(response: 0.3)) { selectedTab = 1 }
+                }
+                
+                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 2) {
+                    withAnimation(.spring(response: 0.3)) { selectedTab = 2 }
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            
+            // Tab content
+            ScrollView {
+                VStack(spacing: 20) {
+                    switch selectedTab {
+                    case 0:
+                        GeneralPreferences()
+                    case 1:
+                        APIKeyPreferences()
+                    case 2:
+                        ReadingPreferences()
+                    default:
+                        EmptyView()
+                    }
+                }
+                .padding(24)
+            }
+            
+            Spacer()
+        }
+        .frame(width: 560, height: 520)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.098, green: 0.118, blue: 0.157),
+                    Color(red: 0.078, green: 0.094, blue: 0.133)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+}
+
+// MARK: - Tab Button
+
+struct TabButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(isSelected ? .accentBlue : (isHovered ? .textPrimary : .textSecondary))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.accentBlue.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isSelected ? Color.accentBlue.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - General Preferences
+
+struct GeneralPreferences: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PreferenceSection(title: "Playback", icon: "play.circle") {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Default speed
+                    HStack {
+                        Text("Default Speed")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.textPrimary)
+                        
+                        Spacer()
+                        
+                        Picker("", selection: $appState.playbackSpeed) {
+                            ForEach(AppState.speedPresets, id: \.self) { speed in
+                                Text("\(speed, specifier: "%.1f")×").tag(speed)
+                            }
+                        }
+                        .frame(width: 100)
+                        .pickerStyle(.menu)
+                    }
+                    
+                    // Auto-scroll toggle
+                    ToggleRow(
+                        title: "Auto-scroll",
+                        subtitle: "Keep current sentence centered",
+                        isOn: $appState.autoScrollEnabled
+                    )
+                }
+            }
+            
+            PreferenceSection(title: "Startup", icon: "power") {
+                VStack(alignment: .leading, spacing: 16) {
+                    ToggleRow(
+                        title: "Restore last PDF",
+                        subtitle: "Open previous document on launch",
+                        isOn: .constant(true)
+                    )
+                    
+                    ToggleRow(
+                        title: "Resume position",
+                        subtitle: "Continue from where you left off",
+                        isOn: .constant(true)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - API Key Preferences
+
+struct APIKeyPreferences: View {
+    @State private var apiKeys: [String] = ["", "", "", "", ""]
+    @State private var showKeys: Bool = false
+    @State private var statusMessage: String = ""
+    @State private var isSuccess: Bool = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Info banner
+            HStack(spacing: 12) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.accentBlue)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Groq API Keys")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.textPrimary)
+                    
+                    Text("Enter up to 5 keys for load balancing. Keys are stored locally and only sent to Groq.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.accentBlue.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(Color.accentBlue.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            
+            // API Key inputs
+            PreferenceSection(title: "API Keys", icon: "key.fill") {
+                VStack(spacing: 12) {
+                    ForEach(0..<5, id: \.self) { index in
+                        HStack(spacing: 12) {
+                            // Key number badge
+                            ZStack {
+                                if apiKeys[index].isEmpty {
+                                    Circle()
+                                        .fill(Color.white.opacity(0.05))
+                                        .frame(width: 24, height: 24)
+                                } else {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [.accentBlue, .accentPurple],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 24, height: 24)
+                                }
+                                
+                                Text("\(index + 1)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(apiKeys[index].isEmpty ? .textTertiary : .white)
+                            }
+                            
+                            // Input field
+                            Group {
+                                if showKeys {
+                                    TextField("gsk_...", text: $apiKeys[index])
+                                } else {
+                                    SecureField("gsk_...", text: $apiKeys[index])
+                                }
+                            }
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.white.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(
+                                        apiKeys[index].isEmpty ? Color.white.opacity(0.08) : Color.accentBlue.opacity(0.3),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                    }
+                    
+                    // Action buttons
+                    HStack {
+                        Button(action: { showKeys.toggle() }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: showKeys ? "eye.slash" : "eye")
+                                    .font(.system(size: 12))
+                                Text(showKeys ? "Hide" : "Show")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Spacer()
+                        
+                        // Save button
+                        Button(action: saveAPIKeys) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle")
+                                    .font(.system(size: 13))
+                                Text("Save Keys")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(
+                                    colors: [.accentBlue, .accentPurple],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.top, 8)
+                    
+                    // Status message
+                    if !statusMessage.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: isSuccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .foregroundColor(isSuccess ? .green : .red)
+                            
+                            Text(statusMessage)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(isSuccess ? .green : .red)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+            
+            // Help text
+            PreferenceSection(title: "Alternative Methods", icon: "terminal") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("You can also set keys via:")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.textSecondary)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        CodeBlock(text: "export GROQ_API_KEY=\"gsk_...\"")
+                        CodeBlock(text: "export GROQ_API_KEY_1=\"gsk_...\"")
+                    }
+                    
+                    Text("Or create ~/.flowread/api_keys.json")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(.textTertiary)
+                }
+            }
+        }
+        .onAppear { loadAPIKeys() }
+    }
+    
+    private func loadAPIKeys() {
+        let configPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".flowread/api_keys.json")
+        
+        if FileManager.default.fileExists(atPath: configPath.path) {
+            do {
+                let data = try Data(contentsOf: configPath)
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let keys = json["groq_api_keys"] as? [String] {
+                    for (index, key) in keys.prefix(5).enumerated() {
+                        apiKeys[index] = key
+                    }
+                }
+            } catch {
+                print("Failed to load API keys: \(error)")
+            }
+        }
+    }
+    
+    private func saveAPIKeys() {
+        let configDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".flowread")
+        let configPath = configDir.appendingPathComponent("api_keys.json")
+        
+        do {
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+            
+            let validKeys = apiKeys.filter { !$0.isEmpty }
+            let json: [String: Any] = ["groq_api_keys": validKeys]
+            let data = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+            try data.write(to: configPath)
+            
+            statusMessage = "Keys saved successfully!"
+            isSuccess = true
+        } catch {
+            statusMessage = "Failed to save: \(error.localizedDescription)"
+            isSuccess = false
+        }
+    }
+}
+
+// MARK: - Reading Preferences
+
+struct ReadingPreferences: View {
+    @State private var fontSize: Double = 17
+    @State private var lineSpacing: Double = 10
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PreferenceSection(title: "Typography", icon: "textformat.size") {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Font size
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Font Size")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                            
+                            Spacer()
+                            
+                            Text("\(Int(fontSize)) pt")
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.accentBlue)
+                        }
+                        
+                        Slider(value: $fontSize, in: 14...24, step: 1)
+                            .tint(.accentBlue)
+                    }
+                    
+                    // Line spacing
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Line Spacing")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.textPrimary)
+                            
+                            Spacer()
+                            
+                            Text("\(Int(lineSpacing)) pt")
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.accentBlue)
+                        }
+                        
+                        Slider(value: $lineSpacing, in: 6...18, step: 1)
+                            .tint(.accentBlue)
+                    }
+                }
+            }
+            
+            // Preview
+            PreferenceSection(title: "Preview", icon: "eye") {
+                Text("The quick brown fox jumps over the lazy dog. This is how your reading experience will look.")
+                    .font(.system(size: CGFloat(fontSize), weight: .regular, design: .serif))
+                    .lineSpacing(CGFloat(lineSpacing))
+                    .foregroundColor(.textPrimary)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(red: 0.118, green: 0.141, blue: 0.188))
+                    )
+            }
+        }
+    }
+}
+
+// MARK: - Helper Views
+
+struct PreferenceSection<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: () -> Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.accentBlue)
+                
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.textPrimary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+            }
+            
+            // Content
+            content()
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.white.opacity(0.03))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                        )
+                )
+        }
+    }
+}
+
+struct ToggleRow: View {
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.textPrimary)
+                
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(.textTertiary)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .tint(.accentBlue)
+        }
+    }
+}
+
+struct CodeBlock: View {
+    let text: String
+    
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .foregroundColor(.accentBlue)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.accentBlue.opacity(0.1))
+            )
+    }
+}
+
+#Preview {
+    PreferencesView()
+        .environmentObject(AppState())
+}
