@@ -9,6 +9,12 @@ struct PreferencesView: View {
     
     @State private var selectedTab = 0
     
+    // Explicit colors to ensure visibility
+    let textWhite = Color.white
+    let textGray = Color(white: 0.8)
+    let textMuted = Color(white: 0.6)
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header with gradient
@@ -16,11 +22,11 @@ struct PreferencesView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Preferences")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.textPrimary)
+                        .foregroundColor(textWhite)
                     
                     Text("Customize your reading experience")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.textTertiary)
+                        .foregroundColor(textMuted)
                 }
                 
                 Spacer()
@@ -30,7 +36,7 @@ struct PreferencesView: View {
                         .font(.system(size: 24))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.textSecondary, .textTertiary],
+                                colors: [Color(white: 0.7), Color(white: 0.5)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -110,6 +116,9 @@ struct TabButton: View {
     
     @State private var isHovered = false
     
+    // Explicit colors
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -119,16 +128,16 @@ struct TabButton: View {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(isSelected ? .accentBlue : (isHovered ? .textPrimary : .textSecondary))
+            .foregroundColor(isSelected ? vibrantBlue : (isHovered ? .white : Color(white: 0.7)))
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? Color.accentBlue.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+                    .fill(isSelected ? vibrantBlue.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isSelected ? Color.accentBlue.opacity(0.3) : Color.clear, lineWidth: 1)
+                    .strokeBorder(isSelected ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -141,6 +150,10 @@ struct TabButton: View {
 struct GeneralPreferences: View {
     @EnvironmentObject var appState: AppState
     
+    // Explicit colors
+    let textWhite = Color.white
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             PreferenceSection(title: "Playback", icon: "play.circle") {
@@ -149,16 +162,19 @@ struct GeneralPreferences: View {
                     HStack {
                         Text("Default Speed")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.textPrimary)
+                            .foregroundColor(textWhite)
                         
                         Spacer()
                         
                         Picker("", selection: $appState.playbackSpeed) {
                             ForEach(AppState.speedPresets, id: \.self) { speed in
                                 Text("\(speed, specifier: "%.1f")×").tag(speed)
+                                    .foregroundColor(.white) // Ensure picker items are visible
                             }
                         }
-                        .frame(width: 100)
+                        .frame(width: 80)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(6)
                         .pickerStyle(.menu)
                     }
                     
@@ -198,32 +214,38 @@ struct APIKeyPreferences: View {
     @State private var statusMessage: String = ""
     @State private var isSuccess: Bool = false
     
+    // Explicit colors
+    let textWhite = Color.white
+    let textGray = Color(white: 0.8)
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Info banner
             HStack(spacing: 12) {
                 Image(systemName: "info.circle.fill")
                     .font(.system(size: 20))
-                    .foregroundColor(.accentBlue)
+                    .foregroundColor(vibrantBlue)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Groq API Keys")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.textPrimary)
+                        .foregroundColor(textWhite)
                     
                     Text("Enter up to 5 keys for load balancing. Keys are stored locally and only sent to Groq.")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.textSecondary)
+                        .foregroundColor(textGray)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.accentBlue.opacity(0.1))
+                    .fill(vibrantBlue.opacity(0.1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(Color.accentBlue.opacity(0.2), lineWidth: 1)
+                            .strokeBorder(vibrantBlue.opacity(0.2), lineWidth: 1)
                     )
             )
             
@@ -242,7 +264,7 @@ struct APIKeyPreferences: View {
                                     Circle()
                                         .fill(
                                             LinearGradient(
-                                                colors: [.accentBlue, .accentPurple],
+                                                colors: [vibrantBlue, vibrantPurple],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
                                             )
@@ -252,28 +274,31 @@ struct APIKeyPreferences: View {
                                 
                                 Text("\(index + 1)")
                                     .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(apiKeys[index].isEmpty ? .textTertiary : .white)
+                                    .foregroundColor(apiKeys[index].isEmpty ? Color(white: 0.5) : .white)
                             }
                             
                             // Input field
                             Group {
                                 if showKeys {
                                     TextField("gsk_...", text: $apiKeys[index])
+                                        .textFieldStyle(.plain)
+                                        .foregroundColor(textWhite)
                                 } else {
                                     SecureField("gsk_...", text: $apiKeys[index])
+                                        .textFieldStyle(.plain)
+                                        .foregroundColor(textWhite)
                                 }
                             }
-                            .textFieldStyle(.plain)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .padding(12)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.white.opacity(0.05))
+                                    .fill(Color.white.opacity(0.08)) // Slightly lighter background for input
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
                                     .strokeBorder(
-                                        apiKeys[index].isEmpty ? Color.white.opacity(0.08) : Color.accentBlue.opacity(0.3),
+                                        apiKeys[index].isEmpty ? Color.white.opacity(0.1) : vibrantBlue.opacity(0.3),
                                         lineWidth: 1
                                     )
                             )
@@ -289,7 +314,7 @@ struct APIKeyPreferences: View {
                                 Text(showKeys ? "Hide" : "Show")
                                     .font(.system(size: 12, weight: .medium))
                             }
-                            .foregroundColor(.textSecondary)
+                            .foregroundColor(textGray)
                         }
                         .buttonStyle(.plain)
                         
@@ -308,7 +333,7 @@ struct APIKeyPreferences: View {
                             .padding(.vertical, 10)
                             .background(
                                 LinearGradient(
-                                    colors: [.accentBlue, .accentPurple],
+                                    colors: [vibrantBlue, vibrantPurple],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
@@ -339,7 +364,7 @@ struct APIKeyPreferences: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("You can also set keys via:")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.textSecondary)
+                        .foregroundColor(textGray)
                     
                     VStack(alignment: .leading, spacing: 6) {
                         CodeBlock(text: "export GROQ_API_KEY=\"gsk_...\"")
@@ -348,7 +373,7 @@ struct APIKeyPreferences: View {
                     
                     Text("Or create ~/.flowread/api_keys.json")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(.textTertiary)
+                        .foregroundColor(Color(white: 0.6))
                 }
             }
         }
@@ -402,6 +427,10 @@ struct ReadingPreferences: View {
     @State private var fontSize: Double = 17
     @State private var lineSpacing: Double = 10
     
+    // Explicit colors
+    let textWhite = Color.white
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             PreferenceSection(title: "Typography", icon: "textformat.size") {
@@ -411,17 +440,17 @@ struct ReadingPreferences: View {
                         HStack {
                             Text("Font Size")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.textPrimary)
+                                .foregroundColor(textWhite)
                             
                             Spacer()
                             
                             Text("\(Int(fontSize)) pt")
                                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.accentBlue)
+                                .foregroundColor(vibrantBlue)
                         }
                         
                         Slider(value: $fontSize, in: 14...24, step: 1)
-                            .tint(.accentBlue)
+                            .tint(vibrantBlue)
                     }
                     
                     // Line spacing
@@ -429,17 +458,17 @@ struct ReadingPreferences: View {
                         HStack {
                             Text("Line Spacing")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.textPrimary)
+                                .foregroundColor(textWhite)
                             
                             Spacer()
                             
                             Text("\(Int(lineSpacing)) pt")
                                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.accentBlue)
+                                .foregroundColor(vibrantBlue)
                         }
                         
                         Slider(value: $lineSpacing, in: 6...18, step: 1)
-                            .tint(.accentBlue)
+                            .tint(vibrantBlue)
                     }
                 }
             }
@@ -449,7 +478,7 @@ struct ReadingPreferences: View {
                 Text("The quick brown fox jumps over the lazy dog. This is how your reading experience will look.")
                     .font(.system(size: CGFloat(fontSize), weight: .regular, design: .serif))
                     .lineSpacing(CGFloat(lineSpacing))
-                    .foregroundColor(.textPrimary)
+                    .foregroundColor(textWhite)
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -468,17 +497,21 @@ struct PreferenceSection<Content: View>: View {
     let icon: String
     @ViewBuilder let content: () -> Content
     
+    // Explicit colors
+    let textWhite = Color.white
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.accentBlue)
+                    .foregroundColor(vibrantBlue)
                 
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.textPrimary)
+                    .foregroundColor(textWhite)
                     .textCase(.uppercase)
                     .tracking(0.5)
             }
@@ -489,10 +522,10 @@ struct PreferenceSection<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.white.opacity(0.03))
+                        .fill(Color.white.opacity(0.04))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                         )
                 )
         }
@@ -504,23 +537,28 @@ struct ToggleRow: View {
     let subtitle: String
     @Binding var isOn: Bool
     
+    // Explicit colors
+    let textWhite = Color.white
+    let textMuted = Color(white: 0.6)
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.textPrimary)
+                    .foregroundColor(textWhite)
                 
                 Text(subtitle)
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(.textTertiary)
+                    .foregroundColor(textMuted)
             }
             
             Spacer()
             
             Toggle("", isOn: $isOn)
                 .toggleStyle(.switch)
-                .tint(.accentBlue)
+                .tint(vibrantBlue)
         }
     }
 }
@@ -528,15 +566,22 @@ struct ToggleRow: View {
 struct CodeBlock: View {
     let text: String
     
+    // Explicit colors
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundColor(.accentBlue)
+            .foregroundColor(vibrantBlue)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.accentBlue.opacity(0.1))
+                    .fill(vibrantBlue.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(vibrantBlue.opacity(0.2), lineWidth: 1)
             )
     }
 }

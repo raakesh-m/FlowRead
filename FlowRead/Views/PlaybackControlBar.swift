@@ -49,8 +49,9 @@ struct CurrentChunkInfo: View {
     @EnvironmentObject var appState: AppState
     
     private var currentChunk: TextChunk? {
-        guard appState.currentChunkIndex < appState.textChunks.count else { return nil }
-        return appState.textChunks[appState.currentChunkIndex]
+        let index = appState.currentChunkIndex
+        guard index >= 0, index < appState.textChunks.count else { return nil }
+        return appState.textChunks[index]
     }
     
     var body: some View {

@@ -78,7 +78,7 @@ class AppState: ObservableObject {
            let url = URL(string: lastPDFPath),
            FileManager.default.fileExists(atPath: url.path) {
             Task {
-                await loadPDF(from: url)
+                await loadPDF(from: url, showError: false)
                 if let position = state.lastReadingPosition {
                     self.currentChunkIndex = min(position, textChunks.count - 1)
                 }
@@ -97,12 +97,14 @@ class AppState: ObservableObject {
     }
     
     // MARK: - PDF Loading
-    func loadPDF(from url: URL) async {
+    func loadPDF(from url: URL, showError: Bool = true) async {
         isLoading = true
         loadingMessage = "Loading PDF..."
         
         guard let document = PDFDocument(url: url) else {
-            showErrorMessage("Unable to load PDF. The file may be corrupted or unsupported.")
+            if showError {
+                showErrorMessage("Unable to load PDF. The file may be corrupted or unsupported.")
+            }
             isLoading = false
             return
         }
