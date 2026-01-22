@@ -169,10 +169,33 @@ struct GeneralPreferences: View {
                         Picker("", selection: $appState.playbackSpeed) {
                             ForEach(AppState.speedPresets, id: \.self) { speed in
                                 Text("\(speed, specifier: "%.1f")×").tag(speed)
-                                    .foregroundColor(.white) // Ensure picker items are visible
+                                    .foregroundColor(.white)
                             }
                         }
                         .frame(width: 80)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(6)
+                        .pickerStyle(.menu)
+                    }
+                    
+                    // Voice Selection
+                    HStack {
+                        Text("Voice")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(textWhite)
+                        
+                        Spacer()
+                        
+                        Picker("", selection: Binding(
+                            get: { GroqVoice(rawValue: appState.selectedVoice) ?? .aura },
+                            set: { appState.updateVoice($0) }
+                        )) {
+                            ForEach(GroqVoice.allCases) { voice in
+                                Text(voice.displayName).tag(voice)
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(width: 140)
                         .background(Color.white.opacity(0.1))
                         .cornerRadius(6)
                         .pickerStyle(.menu)
@@ -209,6 +232,7 @@ struct GeneralPreferences: View {
 // MARK: - API Key Preferences
 
 struct APIKeyPreferences: View {
+    @EnvironmentObject var appState: AppState // Add environment object
     @State private var apiKeys: [String] = ["", "", "", "", ""]
     @State private var showKeys: Bool = false
     @State private var statusMessage: String = ""
@@ -412,6 +436,9 @@ struct APIKeyPreferences: View {
             let data = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
             try data.write(to: configPath)
             
+            // Reload keys in AppState
+            appState.reloadKeys()
+            
             statusMessage = "Keys saved successfully!"
             isSuccess = true
         } catch {
@@ -424,8 +451,7 @@ struct APIKeyPreferences: View {
 // MARK: - Reading Preferences
 
 struct ReadingPreferences: View {
-    @State private var fontSize: Double = 17
-    @State private var lineSpacing: Double = 10
+    @EnvironmentObject var appState: AppState
     
     // Explicit colors
     let textWhite = Color.white
@@ -444,13 +470,14 @@ struct ReadingPreferences: View {
                             
                             Spacer()
                             
-                            Text("\(Int(fontSize)) pt")
+                            Text("\(Int(appState.fontSize)) pt")
                                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                                 .foregroundColor(vibrantBlue)
                         }
                         
-                        Slider(value: $fontSize, in: 14...24, step: 1)
+                        Slider(value: $appState.fontSize, in: 14...32, step: 1) // Increased max range
                             .tint(vibrantBlue)
+                            .onChange(of: appState.fontSize) { _ in appState.saveState() }
                     }
                     
                     // Line spacing
@@ -462,13 +489,14 @@ struct ReadingPreferences: View {
                             
                             Spacer()
                             
-                            Text("\(Int(lineSpacing)) pt")
+                            Text("\(Int(appState.lineSpacing)) pt")
                                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                                 .foregroundColor(vibrantBlue)
                         }
                         
-                        Slider(value: $lineSpacing, in: 6...18, step: 1)
+                        Slider(value: $appState.lineSpacing, in: 4...24, step: 1)
                             .tint(vibrantBlue)
+                            .onChange(of: appState.lineSpacing) { _ in appState.saveState() }
                     }
                 }
             }
@@ -476,8 +504,8 @@ struct ReadingPreferences: View {
             // Preview
             PreferenceSection(title: "Preview", icon: "eye") {
                 Text("The quick brown fox jumps over the lazy dog. This is how your reading experience will look.")
-                    .font(.system(size: CGFloat(fontSize), weight: .regular, design: .serif))
-                    .lineSpacing(CGFloat(lineSpacing))
+                    .font(.system(size: CGFloat(appState.fontSize), weight: .regular, design: .serif))
+                    .lineSpacing(CGFloat(appState.lineSpacing))
                     .foregroundColor(textWhite)
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)

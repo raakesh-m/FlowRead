@@ -53,8 +53,10 @@ struct TextChunkView: View {
     let chunk: TextChunk
     let index: Int
     let isActive: Bool
+    let isActive: Bool
     let isPlayed: Bool
     
+    @EnvironmentObject var appState: AppState
     @State private var isHovered = false
     
     var body: some View {
@@ -88,9 +90,9 @@ struct TextChunkView: View {
             
             // Text content
             Text(chunk.text)
-                .font(.system(size: 17, weight: .regular, design: .serif))
+                .font(.system(size: CGFloat(appState.fontSize), weight: .regular, design: .serif))
                 .foregroundColor(textColor)
-                .lineSpacing(10)
+                .lineSpacing(CGFloat(appState.lineSpacing))
                 .tracking(0.3)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 18)

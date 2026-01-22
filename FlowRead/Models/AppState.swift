@@ -25,6 +25,10 @@ class AppState: ObservableObject {
     @Published var showPreferences: Bool = false
     @Published var errorMessage: String?
     @Published var showError: Bool = false
+    @Published var isTTSEnabled: Bool = true
+    @Published var fontSize: Double = 17.0
+    @Published var lineSpacing: Double = 10.0
+    @Published var selectedVoice: String = GroqVoice.aura.rawValue
     
     // MARK: - Services
     let audioManager: AudioPlaybackManager
@@ -72,6 +76,24 @@ class AppState: ObservableObject {
         
         self.playbackSpeed = state.playbackSpeed
         self.autoScrollEnabled = state.autoScrollEnabled
+        self.isTTSEnabled = state.isTTSEnabled
+        
+        if let size = state.fontSize {
+            self.fontSize = size
+        }
+        
+        if let spacing = state.lineSpacing {
+            self.lineSpacing = spacing
+        }
+        
+        if let voiceID = state.selectedVoice {
+            self.selectedVoice = voiceID
+            Task {
+                if let voice = GroqVoice(rawValue: voiceID) {
+                    await ttsService.setVoice(voice)
+                }
+            }
+        }
         
         // Restore last opened PDF if available
         if let lastPDFPath = state.lastPDFPath,
@@ -91,7 +113,11 @@ class AppState: ObservableObject {
             lastPDFPath: pdfURL?.absoluteString,
             lastReadingPosition: currentChunkIndex,
             playbackSpeed: playbackSpeed,
-            autoScrollEnabled: autoScrollEnabled
+            autoScrollEnabled: autoScrollEnabled,
+            selectedVoice: selectedVoice,
+            fontSize: fontSize,
+            lineSpacing: lineSpacing,
+            isTTSEnabled: isTTSEnabled
         )
         persistenceManager.saveState(state)
     }
@@ -208,6 +234,21 @@ class AppState: ObservableObject {
         let chunk = textChunks[currentChunkIndex]
         
         Task {
+            // Handle Non-TTS Mode (Visual Only)
+            if !isTTSEnabled {
+                let charCount = chunk.text.count
+                // Approx 15 chars per second normal speed
+                let seconds = Double(charCount) / (15.0 * playbackSpeed)
+                let nanoseconds = UInt64(max(seconds, 1.0) * 1_000_000_000)
+                
+                try? await Task.sleep(nanoseconds: nanoseconds)
+                
+                if isPlaying {
+                    onChunkCompleted()
+                }
+                return
+            }
+        
             do {
                 isLoading = true
                 loadingMessage = "Generating audio..."
@@ -294,5 +335,20 @@ class AppState: ObservableObject {
     func dismissError() {
         showError = false
         errorMessage = nil
+    }
+    
+    // MARK: - Settings Actions
+    func reloadKeys() {
+        Task {
+            await ttsService.reloadKeys()
+        }
+    }
+    
+    func updateVoice(_ voice: GroqVoice) {
+        selectedVoice = voice.rawValue
+        Task {
+            await ttsService.setVoice(voice)
+            saveState()
+        }
     }
 }

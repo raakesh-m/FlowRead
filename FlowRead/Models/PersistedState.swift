@@ -12,6 +12,7 @@ struct PersistedState: Codable {
     var selectedVoice: String?
     var fontSize: Double?
     var lineSpacing: Double?
+    var isTTSEnabled: Bool
     
     init(
         lastPDFPath: String? = nil,
@@ -20,7 +21,8 @@ struct PersistedState: Codable {
         autoScrollEnabled: Bool = true,
         selectedVoice: String? = nil,
         fontSize: Double? = nil,
-        lineSpacing: Double? = nil
+        lineSpacing: Double? = nil,
+        isTTSEnabled: Bool = true
     ) {
         self.lastPDFPath = lastPDFPath
         self.lastReadingPosition = lastReadingPosition
@@ -29,6 +31,7 @@ struct PersistedState: Codable {
         self.selectedVoice = selectedVoice
         self.fontSize = fontSize
         self.lineSpacing = lineSpacing
+        self.isTTSEnabled = isTTSEnabled
     }
     
     static let `default` = PersistedState()

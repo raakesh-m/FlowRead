@@ -139,6 +139,16 @@ actor GroqTTSService {
         return []
     }
     
+    /// Reload API keys from config file
+    func reloadKeys() {
+        let keys = loadKeysFromConfigFile()
+        if !keys.isEmpty {
+            self.apiKeys = keys
+            self.currentKeyIndex = 0
+            self.failedKeys.removeAll()
+        }
+    }
+    
     /// Set the voice for TTS
     func setVoice(_ voice: GroqVoice) {
         self.selectedVoice = voice

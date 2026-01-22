@@ -17,8 +17,11 @@ struct PlaybackControlBar: View {
             
             Spacer()
             
-            SpeedControl()
-                .frame(maxWidth: 200, alignment: .trailing)
+            HStack(spacing: 16) {
+                TTSToggle()
+                SpeedControl()
+            }
+            .frame(maxWidth: 300, alignment: .trailing)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)
@@ -230,6 +233,55 @@ struct ControlButton: View {
         .disabled(disabled)
         .onHover { isHovered = $0 }
         .scaleEffect(isHovered && !disabled ? 1.08 : 1.0)
+        .animation(.spring(response: 0.2), value: isHovered)
+    }
+}
+
+// MARK: - TTS Toggle
+
+struct TTSToggle: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: {
+            appState.isTTSEnabled.toggle()
+            appState.saveState()
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.6))
+                
+                Text(appState.isTTSEnabled ? "TTS ON" : "TTS OFF")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.6))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(isHovered ? 0.12 : 0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                appState.isTTSEnabled ?
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3),
+                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ) :
+                                LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .animation(.spring(response: 0.2), value: isHovered)
     }
 }
