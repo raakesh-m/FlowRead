@@ -30,27 +30,31 @@ enum GroqTTSError: Error, LocalizedError {
     }
 }
 
-/// Available Groq TTS voices
+/// Available Groq TTS voices (Canopy Labs Orpheus - Updated Jan 2026)
 enum GroqVoice: String, CaseIterable, Identifiable {
-    case aura = "aura-asteria-en"
-    case ember = "aura-athena-en"
-    case orbit = "aura-luna-en"
-    case arcas = "aura-arcas-en"
-    case helios = "aura-helios-en"
-    case zeus = "aura-zeus-en"
-    case hera = "aura-hera-en"
-    case orion = "aura-orion-en"
-    case perseus = "aura-perseus-en"
-    case angus = "aura-angus-en"
-    case orpheus = "aura-orpheus-en"
-    case stella = "aura-stella-en"
+    // Female voices
+    case autumn = "autumn"
+    case diana = "diana"
+    case hannah = "hannah"
+    
+    // Male voices
+    case austin = "austin"
+    case daniel = "daniel"
+    case troy = "troy"
     
     var id: String { rawValue }
     
     var displayName: String {
-        rawValue.replacingOccurrences(of: "aura-", with: "")
-            .replacingOccurrences(of: "-en", with: "")
-            .capitalized
+        rawValue.capitalized
+    }
+    
+    var gender: String {
+        switch self {
+        case .autumn, .diana, .hannah:
+            return "Female"
+        case .austin, .daniel, .troy:
+            return "Male"
+        }
     }
 }
 
@@ -61,7 +65,7 @@ actor GroqTTSService {
     private var failedKeys: Set<Int> = []
     
     private let baseURL = "https://api.groq.com/openai/v1/audio/speech"
-    private var selectedVoice: GroqVoice = .aura
+    private var selectedVoice: GroqVoice = .hannah  // Default to Hannah voice
     
     private let session: URLSession
     
@@ -228,7 +232,7 @@ actor GroqTTSService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = [
-            "model": "playht-tts",
+            "model": "canopylabs/orpheus-v1-english",  // Updated to new Orpheus model (Jan 2026)
             "input": text,
             "voice": selectedVoice.rawValue,
             "response_format": responseFormat

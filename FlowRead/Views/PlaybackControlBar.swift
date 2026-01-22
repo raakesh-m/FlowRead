@@ -17,11 +17,12 @@ struct PlaybackControlBar: View {
             
             Spacer()
             
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 TTSToggle()
+                VoicePicker()
                 SpeedControl()
             }
-            .frame(maxWidth: 300, alignment: .trailing)
+            .frame(maxWidth: 480, alignment: .trailing)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 20)
@@ -250,31 +251,42 @@ struct TTSToggle: View {
         }) {
             HStack(spacing: 8) {
                 Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.6))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
                 
-                Text(appState.isTTSEnabled ? "TTS ON" : "TTS OFF")
+                Text(appState.isTTSEnabled ? "ON" : "OFF")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.6))
+                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(isHovered ? 0.12 : 0.05))
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(
+                        appState.isTTSEnabled ?
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.2),
+                                Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ) :
+                        LinearGradient(colors: [Color.white.opacity(isHovered ? 0.08 : 0.04)], startPoint: .leading, endPoint: .trailing)
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 10)
                             .stroke(
                                 appState.isTTSEnabled ?
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2)
+                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4),
+                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.3)
                                     ],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 ) :
-                                LinearGradient(colors: [Color.clear], startPoint: .leading, endPoint: .trailing),
+                                LinearGradient(colors: [Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
                                 lineWidth: 1
                             )
                     )
@@ -282,7 +294,163 @@ struct TTSToggle: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.spring(response: 0.2), value: isHovered)
+    }
+}
+
+// MARK: - Voice Picker
+
+struct VoicePicker: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
+    @State private var showVoiceMenu = false
+    
+    private var currentVoice: GroqVoice {
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
+    }
+    
+    var body: some View {
+        Button(action: { showVoiceMenu.toggle() }) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.wave.2.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.36, green: 0.67, blue: 1.0),
+                                Color(red: 0.69, green: 0.46, blue: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VOICE")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(Color(white: 0.5))
+                        .tracking(0.5)
+                    
+                    Text(currentVoice.displayName)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(white: 0.6))
+                    .rotationEffect(.degrees(showVoiceMenu ? 180 : 0))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.25),
+                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.15)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.spring(response: 0.2), value: isHovered)
+        .animation(.spring(response: 0.2), value: showVoiceMenu)
+        .popover(isPresented: $showVoiceMenu) {
+            VoicePickerPopover()
+        }
+    }
+}
+
+// MARK: - Voice Picker Popover
+
+struct VoicePickerPopover: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    
+    private var currentVoice: GroqVoice {
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("SELECT VOICE")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Color(white: 0.5))
+                .tracking(2)
+                .padding(.bottom, 8)
+            
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(GroqVoice.allCases) { voice in
+                        Button(action: {
+                            appState.updateVoice(voice)
+                            dismiss()
+                        }) {
+                            HStack {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(
+                                        currentVoice == voice ?
+                                        Color(red: 0.36, green: 0.67, blue: 1.0) : Color(white: 0.5)
+                                    )
+                                
+                                Text(voice.displayName)
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundColor(
+                                        currentVoice == voice ?
+                                        Color(red: 0.36, green: 0.67, blue: 1.0) : .white
+                                    )
+                                
+                                Spacer()
+                                
+                                if currentVoice == voice {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.36, green: 0.67, blue: 1.0),
+                                                    Color(red: 0.69, green: 0.46, blue: 1.0)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(
+                                        currentVoice == voice ?
+                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.12) :
+                                        Color.clear
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+        }
+        .padding(14)
+        .frame(width: 200)
+        .background(Color(red: 0.12, green: 0.14, blue: 0.19))
     }
 }
 
@@ -294,12 +462,12 @@ struct SpeedControl: View {
     @State private var isHovered = false
     
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 8) {
             // Speed display pill
             Button(action: { isExpanded.toggle() }) {
                 HStack(spacing: 10) {
                     Image(systemName: "gauge.with.needle.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
@@ -311,22 +479,34 @@ struct SpeedControl: View {
                             )
                         )
                     
-                    Text("\(appState.playbackSpeed, specifier: "%.1f")×")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("SPEED")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Color(white: 0.5))
+                            .tracking(0.5)
+                        
+                        Text("\(appState.playbackSpeed, specifier: "%.1f")×")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(white: 0.6))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(isHovered ? 0.12 : 0.08))
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: 10)
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3),
-                                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2)
+                                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.25),
+                                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.15)
                                         ],
                                         startPoint: .leading,
                                         endPoint: .trailing
@@ -338,11 +518,14 @@ struct SpeedControl: View {
             }
             .buttonStyle(.plain)
             .onHover { isHovered = $0 }
+            .scaleEffect(isHovered ? 1.02 : 1.0)
+            .animation(.spring(response: 0.2), value: isHovered)
+            .animation(.spring(response: 0.2), value: isExpanded)
             .popover(isPresented: $isExpanded) {
                 SpeedPickerPopover()
             }
             
-            // Quick adjust
+            // Quick adjust buttons
             HStack(spacing: 6) {
                 MiniButton(icon: "minus") { appState.decreaseSpeed() }
                 MiniButton(icon: "plus") { appState.increaseSpeed() }

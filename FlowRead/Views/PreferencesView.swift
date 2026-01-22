@@ -187,7 +187,7 @@ struct GeneralPreferences: View {
                         Spacer()
                         
                         Picker("", selection: Binding(
-                            get: { GroqVoice(rawValue: appState.selectedVoice) ?? .aura },
+                            get: { GroqVoice(rawValue: appState.selectedVoice) ?? .hannah },
                             set: { appState.updateVoice($0) }
                         )) {
                             ForEach(GroqVoice.allCases) { voice in

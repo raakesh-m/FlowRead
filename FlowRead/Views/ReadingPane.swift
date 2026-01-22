@@ -53,7 +53,7 @@ struct TextChunkView: View {
     let chunk: TextChunk
     let index: Int
     let isActive: Bool
-    let isActive: Bool
+
     let isPlayed: Bool
     
     @EnvironmentObject var appState: AppState

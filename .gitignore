@@ -8,12 +8,16 @@ build/
 *.app
 *.dmg
 *.xcarchive
+build_log.txt
 
 # Xcode
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.playground
 xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
 
 # Generated files
 *.dSYM
