@@ -30,22 +30,17 @@ enum GroqTTSError: Error, LocalizedError {
     }
 }
 
-/// Available Groq TTS voices (Orpheus Model - 11 voices)
+/// Available Groq TTS voices (Playht model)
 enum GroqVoice: String, CaseIterable, Identifiable {
     // Female voices
-    case tara = "tara"
-    case leah = "leah"
-    case jess = "jess"
-    case mia = "mia"
-    case zoe = "zoe"
+    case autumn = "autumn"
+    case diana = "diana"
     case hannah = "hannah"
     
     // Male voices
-    case leo = "leo"
-    case dan = "dan"
-    case zac = "zac"
-    case troy = "troy"
     case austin = "austin"
+    case daniel = "daniel"
+    case troy = "troy"
     
     var id: String { rawValue }
     
@@ -55,9 +50,9 @@ enum GroqVoice: String, CaseIterable, Identifiable {
     
     var gender: String {
         switch self {
-        case .tara, .leah, .jess, .mia, .zoe, .hannah:
+        case .autumn, .diana, .hannah:
             return "Female"
-        case .leo, .dan, .zac, .troy, .austin:
+        case .austin, .daniel, .troy:
             return "Male"
         }
     }
@@ -65,40 +60,18 @@ enum GroqVoice: String, CaseIterable, Identifiable {
     /// Short description of the voice characteristic
     var description: String {
         switch self {
-        case .tara:
+        case .autumn:
+            return "Warm & natural"
+        case .diana:
             return "Clear & professional"
-        case .leah:
-            return "Warm & friendly"
-        case .jess:
-            return "Energetic & youthful"
-        case .mia:
-            return "Soft & gentle"
-        case .zoe:
-            return "Bright & expressive"
         case .hannah:
             return "Calm & soothing"
-        case .leo:
-            return "Deep & confident"
-        case .dan:
-            return "Casual & natural"
-        case .zac:
-            return "Young & dynamic"
-        case .troy:
-            return "Smooth & articulate"
         case .austin:
-            return "Strong & clear"
-        }
-    }
-    
-    /// Icon to represent voice type
-    var icon: String {
-        switch gender {
-        case "Female":
-            return "person.fill"
-        case "Male":
-            return "person.fill"
-        default:
-            return "person.fill"
+            return "Deep & confident"
+        case .daniel:
+            return "Friendly & expressive"
+        case .troy:
+            return "Strong & articulate"
         }
     }
 }
@@ -110,12 +83,12 @@ actor GroqTTSService {
     private var failedKeys: Set<Int> = []
     
     private let baseURL = "https://api.groq.com/openai/v1/audio/speech"
-    private var selectedVoice: GroqVoice = .tara  // Default to Tara voice
-    private var selectedModel: String = "canopylabs/orpheus-v1-english"  // Default TTS model
+    private var selectedVoice: GroqVoice = .hannah  // Default to Hannah voice
+    private var selectedModel: String = "playht-v1"  // Groq TTS model with 6 voices
     
     private let session: URLSession
     
-    // Audio response format - Groq Orpheus supports wav (default) and mp3
+    // Audio response format - Groq supports wav (default) and mp3
     private let responseFormat = "wav"
     
     init() {

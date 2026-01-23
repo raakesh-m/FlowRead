@@ -28,7 +28,7 @@ class AppState: ObservableObject {
     @Published var isTTSEnabled: Bool = true
     @Published var fontSize: Double = 17.0
     @Published var lineSpacing: Double = 10.0
-    @Published var selectedVoice: String = GroqVoice.tara.rawValue
+    @Published var selectedVoice: String = GroqVoice.hannah.rawValue
     
     // MARK: - Services
     let audioManager: AudioPlaybackManager

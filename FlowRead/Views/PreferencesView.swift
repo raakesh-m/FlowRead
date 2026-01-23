@@ -155,7 +155,7 @@ struct GeneralPreferences: View {
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     
     private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
     }
     
     var body: some View {
@@ -306,7 +306,7 @@ struct TTSPreferences: View {
     let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
     
     private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
     }
     
     // Group voices by gender

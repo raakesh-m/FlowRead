@@ -510,7 +510,7 @@ struct VoicePickerPopover: View {
     @Environment(\.dismiss) var dismiss
     
     private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
     }
     
     // Group voices by gender
