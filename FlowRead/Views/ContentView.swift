@@ -111,6 +111,10 @@ struct WelcomeView: View {
     @State private var isHovering = false
     @State private var pulseAnimation = false
     
+    // Responsive breakpoints
+    private let compactWidth: CGFloat = 500
+    private let mediumWidth: CGFloat = 700
+    
     // Gradient for accent colors
     private let accentGradient = LinearGradient(
         colors: [
@@ -123,166 +127,181 @@ struct WelcomeView: View {
     )
     
     var body: some View {
-        VStack(spacing: 50) {
-            Spacer()
+        GeometryReader { geometry in
+            let isCompact = geometry.size.width < compactWidth
+            let isMedium = geometry.size.width < mediumWidth
             
-            // Logo and title
-            VStack(spacing: 24) {
-                // Animated icon with glow
-                ZStack {
-                    // Outer glow rings
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3 - Double(i) * 0.1),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2 - Double(i) * 0.05)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2
-                            )
-                            .frame(width: 130 + CGFloat(i * 20), height: 130 + CGFloat(i * 20))
-                            .opacity(pulseAnimation ? 0.8 : 0.3)
-                    }
-                    
-                    // Main circle with gradient border
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.14, green: 0.16, blue: 0.22),
-                                    Color(red: 0.10, green: 0.11, blue: 0.16)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 120, height: 120)
-                        .overlay(
+            // Responsive sizes
+            let iconSize: CGFloat = isCompact ? 80 : (isMedium ? 100 : 120)
+            let iconFontSize: CGFloat = isCompact ? 32 : (isMedium ? 40 : 48)
+            let titleFontSize: CGFloat = isCompact ? 32 : (isMedium ? 42 : 52)
+            let taglineFontSize: CGFloat = isCompact ? 12 : (isMedium ? 15 : 18)
+            let buttonFontSize: CGFloat = isCompact ? 14 : (isMedium ? 15 : 17)
+            let ringCount = isCompact ? 2 : 3
+            
+            VStack(spacing: isCompact ? 30 : (isMedium ? 40 : 50)) {
+                Spacer()
+                
+                // Logo and title
+                VStack(spacing: isCompact ? 16 : 24) {
+                    // Animated icon with glow
+                    ZStack {
+                        // Outer glow rings
+                        ForEach(0..<ringCount, id: \.self) { i in
                             Circle()
                                 .stroke(
                                     LinearGradient(
                                         colors: [
-                                            Color(red: 0.36, green: 0.67, blue: 1.0),
-                                            Color(red: 0.69, green: 0.46, blue: 1.0)
+                                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3 - Double(i) * 0.1),
+                                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2 - Double(i) * 0.05)
                                         ],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ),
-                                    lineWidth: 2
+                                    lineWidth: isCompact ? 1.5 : 2
                                 )
-                        )
-                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4), radius: 30, y: 5)
+                                .frame(width: iconSize + 10 + CGFloat(i * (isCompact ? 12 : 20)), height: iconSize + 10 + CGFloat(i * (isCompact ? 12 : 20)))
+                                .opacity(pulseAnimation ? 0.8 : 0.3)
+                        }
+                        
+                        // Main circle with gradient border
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.14, green: 0.16, blue: 0.22),
+                                        Color(red: 0.10, green: 0.11, blue: 0.16)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: iconSize, height: iconSize)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.36, green: 0.67, blue: 1.0),
+                                                Color(red: 0.69, green: 0.46, blue: 1.0)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: isCompact ? 1.5 : 2
+                                    )
+                            )
+                            .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4), radius: isCompact ? 15 : 30, y: isCompact ? 3 : 5)
+                        
+                        // Book icon
+                        Image(systemName: "book.pages.fill")
+                            .font(.system(size: iconFontSize, weight: .medium))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.36, green: 0.67, blue: 1.0),
+                                        Color(red: 0.69, green: 0.46, blue: 1.0)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    }
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                            pulseAnimation = true
+                        }
+                    }
                     
-                    // Book icon
-                    Image(systemName: "book.pages.fill")
-                        .font(.system(size: 48, weight: .medium))
+                    // App name with gradient text
+                    Text("FlowRead")
+                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.white, Color(white: 0.85)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
+                    
+                    // Tagline with gradient
+                    Text(isCompact ? "Read • Listen • Flow" : "Read  •  Listen  •  Flow")
+                        .font(.system(size: taglineFontSize, weight: .medium, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
                                     Color(red: 0.36, green: 0.67, blue: 1.0),
                                     Color(red: 0.69, green: 0.46, blue: 1.0)
                                 ],
-                                startPoint: .top,
-                                endPoint: .bottom
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
                         )
+                        .tracking(isCompact ? 1.5 : 3)
                 }
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                        pulseAnimation = true
+                
+                // Open PDF button with vibrant gradient
+                Button(action: { showFilePicker = true }) {
+                    HStack(spacing: isCompact ? 8 : 14) {
+                        Image(systemName: "doc.badge.plus")
+                            .font(.system(size: isCompact ? 16 : 20, weight: .semibold))
+                        Text("Open PDF")
+                            .font(.system(size: buttonFontSize, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, isCompact ? 24 : 40)
+                    .padding(.vertical, isCompact ? 12 : 18)
+                    .background(
+                        ZStack {
+                            // Main gradient
+                            RoundedRectangle(cornerRadius: isCompact ? 12 : 16)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.36, green: 0.67, blue: 1.0),
+                                            Color(red: 0.55, green: 0.45, blue: 1.0),
+                                            Color(red: 0.85, green: 0.40, blue: 0.75)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                            
+                            // Top shine
+                            RoundedRectangle(cornerRadius: isCompact ? 12 : 16)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.25), Color.clear],
+                                        startPoint: .top,
+                                        endPoint: .center
+                                    )
+                                )
+                        }
+                    )
+                    .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(isHovering ? 0.7 : 0.5), radius: isHovering ? (isCompact ? 15 : 25) : (isCompact ? 8 : 15), y: isCompact ? 4 : 8)
+                    .scaleEffect(isHovering ? 1.05 : 1.0)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isHovering = hovering
                     }
                 }
                 
-                // App name with gradient text
-                Text("FlowRead")
-                    .font(.system(size: 52, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white, Color(white: 0.85)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
+                Spacer()
                 
-                // Tagline with gradient
-                Text("Read  •  Listen  •  Flow")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.36, green: 0.67, blue: 1.0),
-                                Color(red: 0.69, green: 0.46, blue: 1.0)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .tracking(3)
-            }
-            
-            // Open PDF button with vibrant gradient
-            Button(action: { showFilePicker = true }) {
-                HStack(spacing: 14) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 20, weight: .semibold))
-                    Text("Open PDF")
-                        .font(.system(size: 17, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 40)
-                .padding(.vertical, 18)
-                .background(
-                    ZStack {
-                        // Main gradient
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0),
-                                        Color(red: 0.55, green: 0.45, blue: 1.0),
-                                        Color(red: 0.85, green: 0.40, blue: 0.75)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        // Top shine
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.25), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
+                // Keyboard shortcuts (hide on very compact screens)
+                if !isCompact {
+                    VStack(spacing: isMedium ? 8 : 10) {
+                        KeyboardHint(key: "⌘O", action: "Open PDF", isCompact: isMedium)
+                        KeyboardHint(key: "⌘,", action: "Preferences", isCompact: isMedium)
                     }
-                )
-                .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(isHovering ? 0.7 : 0.5), radius: isHovering ? 25 : 15, y: 8)
-                .scaleEffect(isHovering ? 1.05 : 1.0)
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isHovering = hovering
+                    .padding(.bottom, isCompact ? 20 : 40)
                 }
             }
-            
-            Spacer()
-            
-            // Keyboard shortcuts
-            VStack(spacing: 10) {
-                KeyboardHint(key: "⌘O", action: "Open PDF")
-                KeyboardHint(key: "⌘,", action: "Preferences (Add API Keys)")
-            }
-            .padding(.bottom, 40)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -291,25 +310,26 @@ struct WelcomeView: View {
 struct KeyboardHint: View {
     let key: String
     let action: String
+    var isCompact: Bool = false
     
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: isCompact ? 6 : 10) {
             Text(key)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .font(.system(size: isCompact ? 11 : 13, weight: .semibold, design: .monospaced))
                 .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, isCompact ? 8 : 10)
+                .padding(.vertical, isCompact ? 4 : 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: isCompact ? 6 : 8)
                         .fill(Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: isCompact ? 6 : 8)
                                 .stroke(Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3), lineWidth: 1)
                         )
                 )
             
             Text(action)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: isCompact ? 11 : 13, weight: .medium))
                 .foregroundColor(Color(white: 0.5))
         }
     }

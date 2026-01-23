@@ -232,8 +232,8 @@ struct GeneralPreferences: View {
 // MARK: - API Key Preferences
 
 struct APIKeyPreferences: View {
-    @EnvironmentObject var appState: AppState // Add environment object
-    @State private var apiKeys: [String] = ["", "", "", "", ""]
+    @EnvironmentObject var appState: AppState
+    @State private var apiKeys: [String] = [""]  // Start with one empty slot
     @State private var showKeys: Bool = false
     @State private var statusMessage: String = ""
     @State private var isSuccess: Bool = false
@@ -257,7 +257,7 @@ struct APIKeyPreferences: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(textWhite)
                     
-                    Text("Enter up to 5 keys for load balancing. Keys are stored locally and only sent to Groq.")
+                    Text("Add multiple keys for load balancing. Free tier: ~30 req/min, 200 chars/request. Keys rotate automatically.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundColor(textGray)
                         .fixedSize(horizontal: false, vertical: true)
@@ -273,10 +273,10 @@ struct APIKeyPreferences: View {
                     )
             )
             
-            // API Key inputs
-            PreferenceSection(title: "API Keys", icon: "key.fill") {
+            // API Key inputs - Dynamic list
+            PreferenceSection(title: "API Keys (\(apiKeys.filter { !$0.isEmpty }.count) active)", icon: "key.fill") {
                 VStack(spacing: 12) {
-                    ForEach(0..<5, id: \.self) { index in
+                    ForEach(Array(apiKeys.enumerated()), id: \.offset) { index, _ in
                         HStack(spacing: 12) {
                             // Key number badge
                             ZStack {
@@ -317,7 +317,7 @@ struct APIKeyPreferences: View {
                             .padding(12)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.white.opacity(0.08)) // Slightly lighter background for input
+                                    .fill(Color.white.opacity(0.08))
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
@@ -326,10 +326,43 @@ struct APIKeyPreferences: View {
                                         lineWidth: 1
                                     )
                             )
+                            
+                            // Remove button (only show if more than 1 key slot)
+                            if apiKeys.count > 1 {
+                                Button(action: { removeKey(at: index) }) {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(Color.red.opacity(0.7))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Remove this key slot")
+                            }
                         }
                     }
                     
-                    // Action buttons
+                    // Add key button
+                    Button(action: addKeySlot) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16))
+                            Text("Add API Key")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(vibrantBlue)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(vibrantBlue.opacity(0.1))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(vibrantBlue.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Action buttons row
                     HStack {
                         Button(action: { showKeys.toggle() }) {
                             HStack(spacing: 6) {
@@ -383,6 +416,20 @@ struct APIKeyPreferences: View {
                 }
             }
             
+            // Rate limit info
+            PreferenceSection(title: "Groq Free Tier Limits", icon: "speedometer") {
+                VStack(alignment: .leading, spacing: 8) {
+                    LimitRow(label: "Requests per minute", value: "~30 RPM")
+                    LimitRow(label: "Text per request", value: "200 chars max")
+                    LimitRow(label: "Audio per hour", value: "~20 min")
+                    
+                    Text("More keys = better load balancing & fewer rate limit errors")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(Color(white: 0.5))
+                        .padding(.top, 4)
+                }
+            }
+            
             // Help text
             PreferenceSection(title: "Alternative Methods", icon: "terminal") {
                 VStack(alignment: .leading, spacing: 12) {
@@ -404,6 +451,20 @@ struct APIKeyPreferences: View {
         .onAppear { loadAPIKeys() }
     }
     
+    private func addKeySlot() {
+        withAnimation(.spring(response: 0.3)) {
+            apiKeys.append("")
+        }
+    }
+    
+    private func removeKey(at index: Int) {
+        withAnimation(.spring(response: 0.3)) {
+            if apiKeys.count > 1 {
+                apiKeys.remove(at: index)
+            }
+        }
+    }
+    
     private func loadAPIKeys() {
         let configPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".flowread/api_keys.json")
@@ -413,9 +474,7 @@ struct APIKeyPreferences: View {
                 let data = try Data(contentsOf: configPath)
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let keys = json["groq_api_keys"] as? [String] {
-                    for (index, key) in keys.prefix(5).enumerated() {
-                        apiKeys[index] = key
-                    }
+                    apiKeys = keys.isEmpty ? [""] : keys
                 }
             } catch {
                 print("Failed to load API keys: \(error)")
@@ -611,6 +670,23 @@ struct CodeBlock: View {
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(vibrantBlue.opacity(0.2), lineWidth: 1)
             )
+    }
+}
+
+struct LimitRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(Color(white: 0.7))
+            Spacer()
+            Text(value)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
+        }
     }
 }
 

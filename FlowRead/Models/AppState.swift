@@ -39,6 +39,9 @@ class AppState: ObservableObject {
     // MARK: - Cancellables
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Audio Cache (for pre-fetching)
+    private var audioCache: [Int: Data] = [:]  // Maps chunk index to audio data
+    
     // MARK: - Speed Presets
     static let speedPresets: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     
@@ -144,6 +147,7 @@ class AppState: ObservableObject {
             let chunks = try await pdfProcessor.extractTextChunks(from: document)
             self.textChunks = chunks
             self.currentChunkIndex = 0
+            self.audioCache.removeAll()  // Clear cache for new document
             
             if chunks.isEmpty {
                 showErrorMessage("No readable text found in this PDF.")
@@ -248,8 +252,32 @@ class AppState: ObservableObject {
                 }
                 return
             }
+            
+            // Check if we already have cached audio for this chunk
+            if let cachedAudio = audioCache[currentChunkIndex] {
+                await audioManager.play(audioData: cachedAudio)
+                // Pre-fetch next chunks in background
+                prefetchUpcomingChunks()
+                return
+            }
         
             do {
+                // Check if text is valid before showing loading
+                let isValid = await ttsService.isValidForTTS(chunk.text)
+                
+                if !isValid {
+                    // Skip this chunk silently and move to next
+                    print("[TTS] Skipping invalid chunk \(currentChunkIndex): '\(chunk.text.prefix(20))...'")
+                    if isPlaying && currentChunkIndex < textChunks.count - 1 {
+                        currentChunkIndex += 1
+                        speakCurrentChunk()
+                    } else {
+                        stop()
+                    }
+                    return
+                }
+                
+                // Only show loading if not cached
                 isLoading = true
                 loadingMessage = "Generating audio..."
                 
@@ -258,13 +286,73 @@ class AppState: ObservableObject {
                 isLoading = false
                 loadingMessage = ""
                 
-                await audioManager.play(audioData: audioData)
+                // Handle nil return (invalid text was detected during processing)
+                guard let audio = audioData else {
+                    // Skip this chunk and move to next
+                    print("[TTS] Synthesize returned nil, skipping chunk")
+                    if isPlaying && currentChunkIndex < textChunks.count - 1 {
+                        currentChunkIndex += 1
+                        speakCurrentChunk()
+                    } else {
+                        stop()
+                    }
+                    return
+                }
+                
+                // Cache and play
+                audioCache[currentChunkIndex] = audio
+                await audioManager.play(audioData: audio)
+                
+                // Pre-fetch next chunks in background
+                prefetchUpcomingChunks()
+                
             } catch let error as GroqTTSError {
                 isLoading = false
+                loadingMessage = ""
                 handleTTSError(error)
             } catch {
                 isLoading = false
+                loadingMessage = ""
                 showErrorMessage("Audio generation failed: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Pre-fetch audio for upcoming chunks in background
+    private func prefetchUpcomingChunks() {
+        let chunksToPreFetch = 3  // Pre-fetch next 3 chunks
+        
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            
+            for offset in 1...chunksToPreFetch {
+                let index = await self.currentChunkIndex + offset
+                let chunks = await self.textChunks
+                
+                // Check bounds
+                guard index < chunks.count else { break }
+                
+                // Skip if already cached
+                let isCached = await self.audioCache[index] != nil
+                if isCached { continue }
+                
+                // Skip if not valid
+                let text = chunks[index].text
+                let isValid = await self.ttsService.isValidForTTS(text)
+                guard isValid else { continue }
+                
+                // Synthesize in background
+                do {
+                    if let audio = try await self.ttsService.synthesize(text: text) {
+                        await MainActor.run {
+                            self.audioCache[index] = audio
+                            print("[TTS Prefetch] Cached chunk \(index)")
+                        }
+                    }
+                } catch {
+                    print("[TTS Prefetch] Failed for chunk \(index): \(error.localizedDescription)")
+                    // Don't propagate errors from prefetch - it's optional optimization
+                }
             }
         }
     }

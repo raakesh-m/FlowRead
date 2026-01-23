@@ -51,7 +51,7 @@ class PDFTextProcessor {
         }
     }
     
-    /// Clean extracted text
+    /// Clean extracted text and join broken sentences
     private func cleanText(_ text: String) -> String {
         var cleaned = text
         
@@ -59,22 +59,94 @@ class PDFTextProcessor {
         cleaned = cleaned.replacingOccurrences(of: "\r\n", with: "\n")
         cleaned = cleaned.replacingOccurrences(of: "\r", with: "\n")
         
-        // Remove excessive whitespace while preserving paragraph breaks
-        let lines = cleaned.components(separatedBy: "\n")
-        let processedLines = lines.map { line -> String in
-            // Collapse multiple spaces to single space
-            let components = line.components(separatedBy: .whitespaces)
-            return components.filter { !$0.isEmpty }.joined(separator: " ")
-        }
-        
-        cleaned = processedLines.joined(separator: "\n")
-        
-        // Remove control characters except newlines and tabs
+        // Remove control characters except newlines
         cleaned = cleaned.unicodeScalars.filter { scalar in
             !CharacterSet.controlCharacters.subtracting(CharacterSet.newlines).contains(scalar)
         }.map(String.init).joined()
         
+        // Split into lines and intelligently join them
+        let lines = cleaned.components(separatedBy: "\n")
+        var joinedLines: [String] = []
+        var currentParagraph = ""
+        
+        for line in lines {
+            // Collapse multiple spaces to single space
+            let trimmedLine = line.components(separatedBy: .whitespaces)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            
+            // Skip empty lines - they indicate paragraph breaks
+            if trimmedLine.isEmpty {
+                if !currentParagraph.isEmpty {
+                    joinedLines.append(currentParagraph.trimmingCharacters(in: .whitespaces))
+                    currentParagraph = ""
+                }
+                continue
+            }
+            
+            // If current paragraph is empty, start a new one
+            if currentParagraph.isEmpty {
+                currentParagraph = trimmedLine
+            } else {
+                // Check if previous line ended with sentence-ending punctuation
+                let lastChar = currentParagraph.last
+                let endsWithSentenceEnd = lastChar == "." || lastChar == "?" || 
+                                           lastChar == "!" || lastChar == ":"
+                
+                if endsWithSentenceEnd {
+                    // Previous line was a complete sentence - could be same paragraph
+                    // Join with space (same paragraph) unless this looks like a new section
+                    if looksLikeNewSection(trimmedLine) {
+                        // New section/chapter - save current and start fresh
+                        joinedLines.append(currentParagraph.trimmingCharacters(in: .whitespaces))
+                        currentParagraph = trimmedLine
+                    } else {
+                        // Same paragraph, different sentence
+                        currentParagraph += " " + trimmedLine
+                    }
+                } else {
+                    // Previous line didn't end with punctuation - it's a broken sentence
+                    // Join with space to continue the sentence
+                    currentParagraph += " " + trimmedLine
+                }
+            }
+        }
+        
+        // Don't forget the last paragraph
+        if !currentParagraph.isEmpty {
+            joinedLines.append(currentParagraph.trimmingCharacters(in: .whitespaces))
+        }
+        
+        // Join paragraphs with double newline to preserve paragraph structure
+        cleaned = joinedLines.joined(separator: "\n\n")
+        
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    /// Check if a line looks like a new section/chapter header
+    private func looksLikeNewSection(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        
+        // Roman numerals
+        let romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+                            "XI", "XII", "XIII", "XIV", "XV"]
+        if romanNumerals.contains(trimmed) { return true }
+        
+        // Chapter/Part/Section headers
+        let headerPatterns = ["^Chapter\\s+", "^Part\\s+", "^Section\\s+", "^Book\\s+",
+                              "^CHAPTER\\s+", "^PART\\s+", "^SECTION\\s+"]
+        for pattern in headerPatterns {
+            if trimmed.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        // All caps short line (likely a title)
+        if trimmed.count < 50 && trimmed == trimmed.uppercased() && trimmed.contains(" ") {
+            return true
+        }
+        
+        return false
     }
     
     /// Split text into sentences
@@ -113,7 +185,141 @@ class PDFTextProcessor {
             chunks = splitBySentenceEndings(text, pageIndex: pageIndex)
         }
         
+        // Post-process chunks to make them TTS-friendly
+        chunks = postProcessChunksForTTS(chunks, pageIndex: pageIndex)
+        
         return chunks.filter { !$0.isEmpty }
+    }
+    
+    /// Post-process chunks to merge short fragments and handle special cases
+    private func postProcessChunksForTTS(_ chunks: [TextChunk], pageIndex: Int) -> [TextChunk] {
+        var result: [TextChunk] = []
+        var pendingChunk: TextChunk? = nil
+        
+        // Minimum word count for a chunk to be considered standalone
+        let minWordCount = 3
+        
+        for chunk in chunks {
+            let text = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Skip empty chunks
+            guard !text.isEmpty else { continue }
+            
+            // Check if this is a Roman numeral chapter header or single letter
+            if isChapterHeader(text) {
+                // Convert Roman numeral to "Chapter X" or skip entirely
+                if let chapterText = transformChapterHeader(text) {
+                    // If there's a pending chunk, add it first
+                    if let pending = pendingChunk {
+                        result.append(pending)
+                        pendingChunk = nil
+                    }
+                    result.append(TextChunk(text: chapterText, pageIndex: pageIndex))
+                }
+                // If transform returns nil, skip this chunk entirely
+                continue
+            }
+            
+            // Count words in chunk
+            let wordCount = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+            
+            // If chunk is too short, merge it with pending or next chunk
+            if wordCount < minWordCount {
+                if let pending = pendingChunk {
+                    // Merge with pending chunk
+                    let mergedText = pending.text + " " + text
+                    pendingChunk = TextChunk(text: mergedText, pageIndex: pageIndex)
+                } else {
+                    // Start a new pending chunk
+                    pendingChunk = chunk
+                }
+            } else {
+                // Normal chunk - check if we have a pending chunk to merge
+                if let pending = pendingChunk {
+                    // Merge pending with current
+                    let mergedText = pending.text + " " + text
+                    result.append(TextChunk(text: mergedText, pageIndex: pageIndex))
+                    pendingChunk = nil
+                } else {
+                    result.append(chunk)
+                }
+            }
+        }
+        
+        // Don't forget any remaining pending chunk
+        if let pending = pendingChunk {
+            // If the pending chunk is too short to be meaningful, check word count
+            let wordCount = pending.text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+            if wordCount >= 2 || pending.text.count >= 10 {
+                result.append(pending)
+            }
+            // Otherwise, just drop it - it's probably noise
+        }
+        
+        return result
+    }
+    
+    /// Check if text is a chapter/section header (Roman numeral, single letter, etc.)
+    private func isChapterHeader(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Common Roman numerals as standalone
+        let romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+                             "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX",
+                             "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"]
+        
+        if romanNumerals.contains(trimmed) {
+            return true
+        }
+        
+        // Single capital letter (could be a section marker)
+        if trimmed.count == 1 && trimmed.first?.isLetter == true && trimmed.first?.isUppercase == true {
+            return true
+        }
+        
+        // "Chapter X", "Part X", "Section X" patterns
+        let headerPatterns = ["^Chapter\\s+", "^Part\\s+", "^Section\\s+", "^Book\\s+"]
+        for pattern in headerPatterns {
+            if trimmed.range(of: pattern, options: .regularExpression, range: nil, locale: nil) != nil {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    /// Transform chapter header for TTS or return nil to skip
+    private func transformChapterHeader(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Roman numeral to spoken chapter number
+        let romanMap: [String: Int] = [
+            "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5,
+            "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10,
+            "XI": 11, "XII": 12, "XIII": 13, "XIV": 14, "XV": 15,
+            "XVI": 16, "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20,
+            "i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5,
+            "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10
+        ]
+        
+        if let chapterNum = romanMap[trimmed] {
+            // Return "Chapter X" for TTS
+            return "Chapter \(chapterNum)."
+        }
+        
+        // Single letter - skip entirely (not useful for TTS)
+        if trimmed.count == 1 {
+            return nil
+        }
+        
+        // Already a proper header like "Chapter 1" - keep as is
+        if trimmed.lowercased().hasPrefix("chapter") || 
+           trimmed.lowercased().hasPrefix("part") ||
+           trimmed.lowercased().hasPrefix("section") {
+            return trimmed
+        }
+        
+        return nil
     }
     
     /// Fallback sentence splitting using punctuation

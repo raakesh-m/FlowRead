@@ -32,90 +32,107 @@ struct TopToolbar: View {
     @EnvironmentObject var appState: AppState
     @State private var showFilePicker = false
     
+    // Responsive breakpoints
+    private let compactWidth: CGFloat = 500
+    private let mediumWidth: CGFloat = 700
+    
     var body: some View {
-        HStack(spacing: 16) {
-            // Document info
-            if let url = appState.pdfURL {
-                HStack(spacing: 12) {
-                    // PDF icon with gradient
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.2),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+        GeometryReader { geometry in
+            let isCompact = geometry.size.width < compactWidth
+            let isMedium = geometry.size.width < mediumWidth
+            
+            HStack(spacing: isMedium ? 10 : 16) {
+                // Document info
+                if let url = appState.pdfURL {
+                    HStack(spacing: isMedium ? 8 : 12) {
+                        // PDF icon with gradient
+                        ZStack {
+                            RoundedRectangle(cornerRadius: isMedium ? 8 : 10)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.2),
+                                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .frame(width: 40, height: 40)
+                                .frame(width: isMedium ? 32 : 40, height: isMedium ? 32 : 40)
+                            
+                            Image(systemName: "doc.fill")
+                                .font(.system(size: isMedium ? 14 : 18, weight: .medium))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.36, green: 0.67, blue: 1.0),
+                                            Color(red: 0.69, green: 0.46, blue: 1.0)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        }
                         
-                        Image(systemName: "doc.fill")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                        if !isCompact {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(url.deletingPathExtension().lastPathComponent)
+                                    .font(.system(size: isMedium ? 13 : 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                
+                                Text("\(appState.textChunks.count) sentences")
+                                    .font(.system(size: isMedium ? 10 : 12, weight: .medium))
+                                    .foregroundColor(Color(white: 0.5))
+                            }
+                            .frame(maxWidth: isMedium ? 120 : 200, alignment: .leading)
+                        }
+                    }
+                }
+                
+                Spacer(minLength: 4)
+                
+                // Progress indicator
+                if !appState.textChunks.isEmpty {
+                    ProgressIndicator(isCompact: isCompact, isMedium: isMedium)
+                }
+                
+                Spacer(minLength: 4)
+                
+                // Toolbar buttons
+                HStack(spacing: isMedium ? 6 : 10) {
+                    ToolbarButton(
+                        icon: appState.autoScrollEnabled ? "arrow.down.circle.fill" : "arrow.down.circle",
+                        isActive: appState.autoScrollEnabled,
+                        tooltip: "Auto-scroll",
+                        size: isMedium ? 32 : 40
+                    ) {
+                        withAnimation(.spring(response: 0.3)) {
+                            appState.autoScrollEnabled.toggle()
+                            appState.saveState()
+                        }
                     }
                     
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(url.deletingPathExtension().lastPathComponent)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                        
-                        Text("\(appState.textChunks.count) sentences")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(white: 0.5))
+                    if !isCompact {
+                        Divider()
+                            .frame(height: isMedium ? 20 : 24)
+                            .padding(.horizontal, isMedium ? 2 : 4)
+                    }
+                    
+                    ToolbarButton(icon: "folder", tooltip: "Open PDF", size: isMedium ? 32 : 40) {
+                        showFilePicker = true
+                    }
+                    
+                    ToolbarButton(icon: "gearshape", tooltip: "Preferences", size: isMedium ? 32 : 40) {
+                        appState.showPreferences = true
                     }
                 }
             }
-            
-            Spacer()
-            
-            // Progress indicator
-            if !appState.textChunks.isEmpty {
-                ProgressIndicator()
-            }
-            
-            Spacer()
-            
-            // Toolbar buttons
-            HStack(spacing: 10) {
-                ToolbarButton(
-                    icon: appState.autoScrollEnabled ? "arrow.down.circle.fill" : "arrow.down.circle",
-                    isActive: appState.autoScrollEnabled,
-                    tooltip: "Auto-scroll"
-                ) {
-                    withAnimation(.spring(response: 0.3)) {
-                        appState.autoScrollEnabled.toggle()
-                        appState.saveState()
-                    }
-                }
-                
-                Divider()
-                    .frame(height: 24)
-                    .padding(.horizontal, 4)
-                
-                ToolbarButton(icon: "folder", tooltip: "Open PDF") {
-                    showFilePicker = true
-                }
-                
-                ToolbarButton(icon: "gearshape", tooltip: "Preferences") {
-                    appState.showPreferences = true
-                }
-            }
+            .padding(.horizontal, isCompact ? 12 : (isMedium ? 16 : 24))
+            .padding(.vertical, isMedium ? 12 : 16)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .frame(height: 72)
         .background(
             ZStack {
                 Color(red: 0.10, green: 0.12, blue: 0.17)
@@ -164,21 +181,27 @@ struct TopToolbar: View {
 
 struct ProgressIndicator: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
+    var isMedium: Bool = false
     
     private var progress: Double {
         guard !appState.textChunks.isEmpty else { return 0 }
         return Double(appState.currentChunkIndex + 1) / Double(appState.textChunks.count)
     }
     
+    private var barWidth: CGFloat {
+        isCompact ? 80 : (isMedium ? 120 : 200)
+    }
+    
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: isCompact ? 8 : (isMedium ? 10 : 16)) {
             // Progress bar with gradient
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: isCompact ? 3 : 4)
                         .fill(Color.white.opacity(0.1))
                     
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: isCompact ? 3 : 4)
                         .fill(
                             LinearGradient(
                                 colors: [
@@ -190,14 +213,14 @@ struct ProgressIndicator: View {
                             )
                         )
                         .frame(width: geometry.size.width * progress)
-                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.5), radius: 4, y: 0)
+                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.5), radius: isCompact ? 2 : 4, y: 0)
                         .animation(.spring(response: 0.3), value: progress)
                 }
             }
-            .frame(width: 200, height: 6)
+            .frame(width: barWidth, height: isCompact ? 4 : 6)
             
-            Text("\(appState.currentChunkIndex + 1) / \(appState.textChunks.count)")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            Text(isCompact ? "\(appState.currentChunkIndex + 1)/\(appState.textChunks.count)" : "\(appState.currentChunkIndex + 1) / \(appState.textChunks.count)")
+                .font(.system(size: isCompact ? 10 : (isMedium ? 11 : 13), weight: .semibold, design: .monospaced))
                 .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
         }
     }
@@ -209,28 +232,37 @@ struct ToolbarButton: View {
     let icon: String
     var isActive: Bool = false
     var tooltip: String = ""
+    var size: CGFloat = 40
     let action: () -> Void
     
     @State private var isHovered = false
     
+    private var iconSize: CGFloat {
+        size < 36 ? 12 : (size < 40 ? 14 : 16)
+    }
+    
+    private var cornerRadius: CGFloat {
+        size < 36 ? 8 : (size < 40 ? 10 : 12)
+    }
+    
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: iconSize, weight: .medium))
                 .foregroundColor(
                     isActive ? Color(red: 0.36, green: 0.67, blue: 1.0) :
                     (isHovered ? .white : Color(white: 0.6))
                 )
-                .frame(width: 40, height: 40)
+                .frame(width: size, height: size)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(
                             isActive ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) :
                             (isHovered ? Color.white.opacity(0.1) : Color.clear)
                         )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(
                             isActive ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4) : Color.clear,
                             lineWidth: 1

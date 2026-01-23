@@ -6,26 +6,61 @@ import SwiftUI
 struct PlaybackControlBar: View {
     @EnvironmentObject var appState: AppState
     
+    // Breakpoints for responsive design
+    private let compactWidth: CGFloat = 600
+    private let mediumWidth: CGFloat = 800
+    
     var body: some View {
-        HStack(spacing: 24) {
-            CurrentChunkInfo()
-                .frame(maxWidth: 300, alignment: .leading)
+        GeometryReader { geometry in
+            let isCompact = geometry.size.width < compactWidth
+            let isMedium = geometry.size.width < mediumWidth
             
-            Spacer()
-            
-            PlaybackControls()
-            
-            Spacer()
-            
-            HStack(spacing: 12) {
-                TTSToggle()
-                VoicePicker()
-                SpeedControl()
+            HStack(spacing: isCompact ? 8 : (isMedium ? 12 : 24)) {
+                // Left: Current chunk info (hide on very compact)
+                if !isCompact {
+                    CurrentChunkInfo(isCompact: isMedium)
+                        .frame(maxWidth: isMedium ? 200 : 300, alignment: .leading)
+                        .layoutPriority(-1)
+                }
+                
+                if !isCompact {
+                    Spacer(minLength: 8)
+                }
+                
+                // Center: Playback controls (always visible)
+                PlaybackControls(isCompact: isCompact)
+                
+                if !isCompact {
+                    Spacer(minLength: 8)
+                }
+                
+                // Right: TTS, Voice, Speed controls
+                if isCompact {
+                    // Compact: Show only essential controls as icons
+                    HStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        TTSToggleCompact()
+                        SpeedControlCompact()
+                    }
+                    .layoutPriority(1)
+                } else {
+                    HStack(spacing: isMedium ? 6 : 12) {
+                        TTSToggle(isCompact: isMedium)
+                        if !isMedium {
+                            VoicePicker(isCompact: false)
+                        } else {
+                            VoicePickerCompact()
+                        }
+                        SpeedControl(isCompact: isMedium)
+                    }
+                    .layoutPriority(1)
+                }
             }
-            .frame(maxWidth: 480, alignment: .trailing)
+            .padding(.horizontal, isCompact ? 12 : (isMedium ? 16 : 28))
+            .padding(.vertical, isCompact ? 16 : 24)
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 20)
+        .frame(height: 120)
         .background(
             ZStack {
                 Color(red: 0.10, green: 0.12, blue: 0.17)
@@ -51,6 +86,7 @@ struct PlaybackControlBar: View {
 
 struct CurrentChunkInfo: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     
     private var currentChunk: TextChunk? {
         let index = appState.currentChunkIndex
@@ -58,10 +94,14 @@ struct CurrentChunkInfo: View {
         return appState.textChunks[index]
     }
     
+    private var truncationLength: Int {
+        isCompact ? 30 : 55
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
             if let chunk = currentChunk {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     // Animated dot
                     Circle()
                         .fill(
@@ -74,23 +114,26 @@ struct CurrentChunkInfo: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: 8, height: 8)
-                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.8), radius: 4)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.8), radius: 3)
                     
-                    Text("Page \(chunk.pageIndex + 1) • Sentence \(appState.currentChunkIndex + 1)")
-                        .font(.system(size: 11, weight: .bold))
+                    Text(isCompact ? "P\(chunk.pageIndex + 1) • S\(appState.currentChunkIndex + 1)" : "Page \(chunk.pageIndex + 1) • Sentence \(appState.currentChunkIndex + 1)")
+                        .font(.system(size: isCompact ? 10 : 11, weight: .bold))
                         .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
                         .textCase(.uppercase)
-                        .tracking(1)
+                        .tracking(isCompact ? 0.5 : 1)
+                        .lineLimit(1)
                 }
                 
-                Text(chunk.text.prefix(55) + (chunk.text.count > 55 ? "..." : ""))
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(Color(white: 0.7))
-                    .lineLimit(1)
+                if !isCompact {
+                    Text(chunk.text.prefix(truncationLength) + (chunk.text.count > truncationLength ? "..." : ""))
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(Color(white: 0.7))
+                        .lineLimit(1)
+                }
             } else {
                 Text("No content")
-                    .font(.system(size: 13))
+                    .font(.system(size: isCompact ? 11 : 13))
                     .foregroundColor(Color(white: 0.4))
             }
         }
@@ -101,21 +144,24 @@ struct CurrentChunkInfo: View {
 
 struct PlaybackControls: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     
     var body: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: isCompact ? 12 : 28) {
             ControlButton(
                 icon: "backward.fill",
-                size: 18,
+                size: isCompact ? 14 : 18,
+                buttonSize: isCompact ? 36 : 52,
                 action: { appState.previousChunk() },
                 disabled: appState.currentChunkIndex == 0
             )
             
-            PlayPauseButton()
+            PlayPauseButton(isCompact: isCompact)
             
             ControlButton(
                 icon: "forward.fill",
-                size: 18,
+                size: isCompact ? 14 : 18,
+                buttonSize: isCompact ? 36 : 52,
                 action: { appState.nextChunk() },
                 disabled: appState.currentChunkIndex >= appState.textChunks.count - 1
             )
@@ -127,8 +173,13 @@ struct PlaybackControls: View {
 
 struct PlayPauseButton: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     @State private var isHovered = false
     @State private var isPressed = false
+    
+    private var outerSize: CGFloat { isCompact ? 60 : 100 }
+    private var buttonSize: CGFloat { isCompact ? 44 : 68 }
+    private var iconSize: CGFloat { isCompact ? 18 : 26 }
     
     var body: some View {
         Button(action: { appState.togglePlayback() }) {
@@ -143,11 +194,11 @@ struct PlayPauseButton: View {
                                 Color.clear
                             ],
                             center: .center,
-                            startRadius: 25,
-                            endRadius: 60
+                            startRadius: isCompact ? 15 : 25,
+                            endRadius: isCompact ? 36 : 60
                         )
                     )
-                    .frame(width: 100, height: 100)
+                    .frame(width: outerSize, height: outerSize)
                 
                 // Main button with gradient
                 Circle()
@@ -162,7 +213,7 @@ struct PlayPauseButton: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 68, height: 68)
+                    .frame(width: buttonSize, height: buttonSize)
                     .overlay(
                         Circle()
                             .fill(
@@ -173,13 +224,13 @@ struct PlayPauseButton: View {
                                 )
                             )
                     )
-                    .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.5), radius: 15, y: 5)
+                    .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.5), radius: isCompact ? 8 : 15, y: isCompact ? 3 : 5)
                 
                 // Icon
                 Image(systemName: appState.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: iconSize, weight: .bold))
                     .foregroundColor(.white)
-                    .offset(x: appState.isPlaying ? 0 : 3)
+                    .offset(x: appState.isPlaying ? 0 : (isCompact ? 2 : 3))
             }
         }
         .buttonStyle(.plain)
@@ -197,6 +248,7 @@ struct PlayPauseButton: View {
 struct ControlButton: View {
     let icon: String
     let size: CGFloat
+    var buttonSize: CGFloat = 52
     let action: () -> Void
     var disabled: Bool = false
     
@@ -211,7 +263,7 @@ struct ControlButton: View {
                         Color.white.opacity(0.1) :
                         Color.white.opacity(0.05)
                     )
-                    .frame(width: 52, height: 52)
+                    .frame(width: buttonSize, height: buttonSize)
                     .overlay(
                         Circle()
                             .stroke(
@@ -242,6 +294,7 @@ struct ControlButton: View {
 
 struct TTSToggle: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     @State private var isHovered = false
     
     var body: some View {
@@ -249,19 +302,21 @@ struct TTSToggle: View {
             appState.isTTSEnabled.toggle()
             appState.saveState()
         }) {
-            HStack(spacing: 8) {
+            HStack(spacing: isCompact ? 4 : 8) {
                 Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: isCompact ? 11 : 13, weight: .medium))
                     .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
                 
-                Text(appState.isTTSEnabled ? "ON" : "OFF")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
+                if !isCompact {
+                    Text(appState.isTTSEnabled ? "ON" : "OFF")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, isCompact ? 10 : 14)
+            .padding(.vertical, isCompact ? 8 : 10)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                     .fill(
                         appState.isTTSEnabled ?
                         LinearGradient(
@@ -275,7 +330,7 @@ struct TTSToggle: View {
                         LinearGradient(colors: [Color.white.opacity(isHovered ? 0.08 : 0.04)], startPoint: .leading, endPoint: .trailing)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                             .stroke(
                                 appState.isTTSEnabled ?
                                 LinearGradient(
@@ -299,10 +354,37 @@ struct TTSToggle: View {
     }
 }
 
+// MARK: - TTS Toggle Compact (Icon only for very small screens)
+
+struct TTSToggleCompact: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: {
+            appState.isTTSEnabled.toggle()
+            appState.saveState()
+        }) {
+            Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(appState.isTTSEnabled ? Color(red: 0.36, green: 0.67, blue: 1.0) : Color(white: 0.5))
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(appState.isTTSEnabled ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) : Color.white.opacity(isHovered ? 0.08 : 0.04))
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Text-to-Speech: \(appState.isTTSEnabled ? "On" : "Off")")
+    }
+}
+
 // MARK: - Voice Picker
 
 struct VoicePicker: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     @State private var isHovered = false
     @State private var showVoiceMenu = false
     
@@ -312,9 +394,9 @@ struct VoicePicker: View {
     
     var body: some View {
         Button(action: { showVoiceMenu.toggle() }) {
-            HStack(spacing: 10) {
+            HStack(spacing: isCompact ? 6 : 10) {
                 Image(systemName: "person.wave.2.fill")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: isCompact ? 11 : 13, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [
@@ -326,29 +408,36 @@ struct VoicePicker: View {
                         )
                     )
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("VOICE")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(white: 0.5))
-                        .tracking(0.5)
-                    
+                if !isCompact {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("VOICE")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Color(white: 0.5))
+                            .tracking(0.5)
+                        
+                        Text(currentVoice.displayName)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                } else {
                     Text(currentVoice.displayName)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
+                        .lineLimit(1)
                 }
                 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: isCompact ? 8 : 10, weight: .semibold))
                     .foregroundColor(Color(white: 0.6))
                     .rotationEffect(.degrees(showVoiceMenu ? 180 : 0))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, isCompact ? 10 : 14)
+            .padding(.vertical, isCompact ? 6 : 8)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                     .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                             .stroke(
                                 LinearGradient(
                                     colors: [
@@ -368,6 +457,46 @@ struct VoicePicker: View {
         .scaleEffect(isHovered ? 1.02 : 1.0)
         .animation(.spring(response: 0.2), value: isHovered)
         .animation(.spring(response: 0.2), value: showVoiceMenu)
+        .popover(isPresented: $showVoiceMenu) {
+            VoicePickerPopover()
+        }
+    }
+}
+
+// MARK: - Voice Picker Compact (Icon only with popover)
+
+struct VoicePickerCompact: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
+    @State private var showVoiceMenu = false
+    
+    private var currentVoice: GroqVoice {
+        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
+    }
+    
+    var body: some View {
+        Button(action: { showVoiceMenu.toggle() }) {
+            Image(systemName: "person.wave.2.fill")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.36, green: 0.67, blue: 1.0),
+                            Color(red: 0.69, green: 0.46, blue: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Voice: \(currentVoice.displayName)")
         .popover(isPresented: $showVoiceMenu) {
             VoicePickerPopover()
         }
@@ -458,16 +587,17 @@ struct VoicePickerPopover: View {
 
 struct SpeedControl: View {
     @EnvironmentObject var appState: AppState
+    var isCompact: Bool = false
     @State private var isExpanded = false
     @State private var isHovered = false
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: isCompact ? 4 : 8) {
             // Speed display pill
             Button(action: { isExpanded.toggle() }) {
-                HStack(spacing: 10) {
+                HStack(spacing: isCompact ? 6 : 10) {
                     Image(systemName: "gauge.with.needle.fill")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: isCompact ? 11 : 13, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [
@@ -479,29 +609,37 @@ struct SpeedControl: View {
                             )
                         )
                     
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("SPEED")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(white: 0.5))
-                            .tracking(0.5)
-                        
+                    if !isCompact {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SPEED")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(Color(white: 0.5))
+                                .tracking(0.5)
+                            
+                            Text("\(appState.playbackSpeed, specifier: "%.1f")×")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                    } else {
                         Text("\(appState.playbackSpeed, specifier: "%.1f")×")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                     }
                     
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(white: 0.6))
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    if !isCompact {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color(white: 0.6))
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, isCompact ? 10 : 14)
+                .padding(.vertical, isCompact ? 6 : 8)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                         .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
                                 .stroke(
                                     LinearGradient(
                                         colors: [
@@ -524,12 +662,49 @@ struct SpeedControl: View {
             .popover(isPresented: $isExpanded) {
                 SpeedPickerPopover()
             }
-            
-            // Quick adjust buttons
-            HStack(spacing: 6) {
-                MiniButton(icon: "minus") { appState.decreaseSpeed() }
-                MiniButton(icon: "plus") { appState.increaseSpeed() }
+        }
+    }
+}
+
+// MARK: - Speed Control Compact (Minimal for very small screens)
+
+struct SpeedControlCompact: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isExpanded = false
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: { isExpanded.toggle() }) {
+            HStack(spacing: 4) {
+                Image(systemName: "gauge.with.needle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.36, green: 0.67, blue: 1.0),
+                                Color(red: 0.69, green: 0.46, blue: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                
+                Text("\(appState.playbackSpeed, specifier: "%.1f")×")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Playback Speed")
+        .popover(isPresented: $isExpanded) {
+            SpeedPickerPopover()
         }
     }
 }
