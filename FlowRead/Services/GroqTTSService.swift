@@ -66,6 +66,7 @@ actor GroqTTSService {
     
     private let baseURL = "https://api.groq.com/openai/v1/audio/speech"
     private var selectedVoice: GroqVoice = .hannah  // Default to Hannah voice
+    private var selectedModel: String = "canopylabs/orpheus-v1-english"  // Default TTS model
     
     private let session: URLSession
     
@@ -156,6 +157,17 @@ actor GroqTTSService {
     /// Set the voice for TTS
     func setVoice(_ voice: GroqVoice) {
         self.selectedVoice = voice
+    }
+    
+    /// Set the TTS model
+    func setModel(_ model: String) {
+        self.selectedModel = model
+        print("[TTS] Model changed to: \(model)")
+    }
+    
+    /// Get current model
+    func getModel() -> String {
+        return selectedModel
     }
     
     /// Add API keys programmatically
@@ -406,7 +418,7 @@ actor GroqTTSService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let body: [String: Any] = [
-            "model": "canopylabs/orpheus-v1-english",  // Groq Orpheus English model
+            "model": selectedModel,  // Use selected model from settings
             "input": text,
             "voice": selectedVoice.rawValue,
             "response_format": responseFormat

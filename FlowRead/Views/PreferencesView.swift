@@ -66,8 +66,12 @@ struct PreferencesView: View {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 1 }
                 }
                 
-                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 2) {
+                TabButton(title: "TTS", icon: "waveform", isSelected: selectedTab == 2) {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 2 }
+                }
+                
+                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 3) {
+                    withAnimation(.spring(response: 0.3)) { selectedTab = 3 }
                 }
             }
             .padding(.horizontal, 24)
@@ -82,6 +86,8 @@ struct PreferencesView: View {
                     case 1:
                         APIKeyPreferences()
                     case 2:
+                        TTSPreferences()
+                    case 3:
                         ReadingPreferences()
                     default:
                         EmptyView()
@@ -226,6 +232,210 @@ struct GeneralPreferences: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - TTS Preferences
+
+struct TTSPreferences: View {
+    @EnvironmentObject var appState: AppState
+    @State private var selectedModel: String = "canopylabs/orpheus-v1-english"
+    @State private var selectedVoice: String = "hannah"
+    
+    // Colors
+    let textWhite = Color.white
+    let textGray = Color(white: 0.8)
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
+    
+    // Available TTS Models
+    let ttsModels = [
+        ("canopylabs/orpheus-v1-english", "Orpheus English", "High-quality English TTS with vocal directions"),
+        ("canopylabs/orpheus-arabic-saudi", "Orpheus Arabic (Saudi)", "Arabic Saudi dialect TTS")
+    ]
+    
+    // Available Voices for English model
+    let englishVoices = ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe", "hannah", "troy", "austin"]
+    let arabicVoices = ["abdulrahman", "khalid", "fatima", "layla"]
+    
+    var currentVoices: [String] {
+        selectedModel.contains("arabic") ? arabicVoices : englishVoices
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // TTS Model Selection
+            PreferenceSection(title: "TTS Model", icon: "waveform") {
+                VStack(spacing: 12) {
+                    ForEach(ttsModels, id: \.0) { model in
+                        ModelSelectionRow(
+                            modelId: model.0,
+                            modelName: model.1,
+                            modelDescription: model.2,
+                            isSelected: selectedModel == model.0,
+                            action: {
+                                selectedModel = model.0
+                                // Reset voice when switching models
+                                selectedVoice = currentVoices.first ?? "hannah"
+                                saveSettings()
+                            }
+                        )
+                    }
+                }
+            }
+            
+            // Voice Selection
+            PreferenceSection(title: "Voice (\(currentVoices.count) available)", icon: "person.wave.2.fill") {
+                VStack(spacing: 8) {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 8) {
+                        ForEach(currentVoices, id: \.self) { voice in
+                            VoiceChip(
+                                name: voice.capitalized,
+                                isSelected: selectedVoice == voice,
+                                action: {
+                                    selectedVoice = voice
+                                    if let voiceEnum = GroqVoice(rawValue: voice) {
+                                        appState.updateVoice(voiceEnum)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // Rate Limits Info
+            PreferenceSection(title: "API Limits & Tips", icon: "info.circle") {
+                VStack(alignment: .leading, spacing: 12) {
+                    LimitRow(label: "Max text per request", value: "200 chars")
+                    LimitRow(label: "Free tier RPM", value: "~30/min/key")
+                    LimitRow(label: "Pre-fetch chunks", value: "3 ahead")
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+                    
+                    Text("💡 Tip: Add 3-5 API keys for smooth uninterrupted playback. Keys rotate automatically.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(white: 0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .onAppear { loadSettings() }
+    }
+    
+    private func loadSettings() {
+        selectedVoice = appState.selectedVoice
+        // Load model from UserDefaults if saved
+        if let savedModel = UserDefaults.standard.string(forKey: "selectedTTSModel") {
+            selectedModel = savedModel
+        }
+    }
+    
+    private func saveSettings() {
+        UserDefaults.standard.set(selectedModel, forKey: "selectedTTSModel")
+        Task {
+            await appState.ttsService.setModel(selectedModel)
+        }
+    }
+}
+
+// MARK: - Model Selection Row
+
+struct ModelSelectionRow: View {
+    let modelId: String
+    let modelName: String
+    let modelDescription: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // Selection indicator
+                ZStack {
+                    Circle()
+                        .strokeBorder(isSelected ? vibrantBlue : Color.white.opacity(0.3), lineWidth: 2)
+                        .frame(width: 20, height: 20)
+                    
+                    if isSelected {
+                        Circle()
+                            .fill(vibrantBlue)
+                            .frame(width: 12, height: 12)
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(modelName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Text(modelDescription)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(Color(white: 0.6))
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(vibrantBlue)
+                }
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? vibrantBlue.opacity(0.15) : Color.white.opacity(isHovered ? 0.08 : 0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isSelected ? vibrantBlue.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - Voice Chip
+
+struct VoiceChip: View {
+    let name: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
+    var body: some View {
+        Button(action: action) {
+            Text(name)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? .white : Color(white: 0.8))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? vibrantBlue : Color.white.opacity(isHovered ? 0.1 : 0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
