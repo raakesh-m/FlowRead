@@ -84,7 +84,7 @@ actor GroqTTSService {
     
     private let baseURL = "https://api.groq.com/openai/v1/audio/speech"
     private var selectedVoice: GroqVoice = .hannah  // Default to Hannah voice
-    private var selectedModel: String = "playht-v1"  // Groq TTS model with 6 voices
+    private var selectedModel: String = "canopylabs/orpheus-v1-english"  // Groq Orpheus TTS model
     
     private let session: URLSession
     

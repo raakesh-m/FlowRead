@@ -84,6 +84,19 @@ class PDFTextProcessor {
                 continue
             }
             
+            // CRITICAL: Check if this line is a standalone Roman numeral or chapter marker
+            // These should NEVER be merged with other text
+            if isStandaloneChapterMarker(trimmedLine) {
+                // Save any pending paragraph first
+                if !currentParagraph.isEmpty {
+                    joinedLines.append(currentParagraph.trimmingCharacters(in: .whitespaces))
+                    currentParagraph = ""
+                }
+                // Add the chapter marker as its own paragraph
+                joinedLines.append(trimmedLine)
+                continue
+            }
+            
             // If current paragraph is empty, start a new one
             if currentParagraph.isEmpty {
                 currentParagraph = trimmedLine
@@ -123,23 +136,51 @@ class PDFTextProcessor {
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
-    /// Check if a line looks like a new section/chapter header
-    private func looksLikeNewSection(_ line: String) -> Bool {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
+    /// Check if a line is a standalone chapter/section marker that should NOT be merged
+    /// This catches Roman numerals (I, II, III...), numeric chapters (1, 2, 3...), etc.
+    private func isStandaloneChapterMarker(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Roman numerals
-        let romanNumerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-                            "XI", "XII", "XIII", "XIV", "XV"]
-        if romanNumerals.contains(trimmed) { return true }
+        // Must be relatively short (chapter markers are typically brief)
+        guard trimmed.count <= 30 else { return false }
         
-        // Chapter/Part/Section headers
-        let headerPatterns = ["^Chapter\\s+", "^Part\\s+", "^Section\\s+", "^Book\\s+",
-                              "^CHAPTER\\s+", "^PART\\s+", "^SECTION\\s+"]
+        // Roman numerals (uppercase and lowercase)
+        let romanPattern = "^[IVXLCDM]+$|^[ivxlcdm]+$"
+        if let regex = try? NSRegularExpression(pattern: romanPattern, options: []),
+           regex.firstMatch(in: trimmed, options: [], range: NSRange(trimmed.startIndex..., in: trimmed)) != nil {
+            // Validate it's a proper Roman numeral sequence
+            let upperTrimmed = trimmed.uppercased()
+            let validRomanNumerals = Set(["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+                                          "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX",
+                                          "XXI", "XXII", "XXIII", "XXIV", "XXV", "XXX", "XL", "L", "C", "D", "M"])
+            if validRomanNumerals.contains(upperTrimmed) {
+                return true
+            }
+        }
+        
+        // Standalone numbers (1, 2, 3, etc.)
+        if let _ = Int(trimmed), trimmed.count <= 3 {
+            return true
+        }
+        
+        // "Chapter X", "Part X", "Section X", "Book X" patterns
+        let headerPatterns = ["^Chapter\\s+\\S+$", "^Part\\s+\\S+$", "^Section\\s+\\S+$", "^Book\\s+\\S+$",
+                              "^CHAPTER\\s+\\S+$", "^PART\\s+\\S+$", "^SECTION\\s+\\S+$", "^BOOK\\s+\\S+$"]
         for pattern in headerPatterns {
             if trimmed.range(of: pattern, options: .regularExpression) != nil {
                 return true
             }
         }
+        
+        return false
+    }
+    
+    /// Check if a line looks like a new section/chapter header
+    private func looksLikeNewSection(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        
+        // Use the standalone marker check
+        if isStandaloneChapterMarker(trimmed) { return true }
         
         // All caps short line (likely a title)
         if trimmed.count < 50 && trimmed == trimmed.uppercased() && trimmed.contains(" ") {
