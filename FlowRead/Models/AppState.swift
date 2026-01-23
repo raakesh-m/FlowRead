@@ -480,6 +480,65 @@ class AppState: ObservableObject {
         saveState()
     }
     
+    func resetSpeed() {
+        playbackSpeed = 1.0
+        saveState()
+    }
+    
+    // MARK: - Feature Toggles
+    func toggleAutoScroll() {
+        autoScrollEnabled.toggle()
+        saveState()
+    }
+    
+    func toggleTTS() {
+        isTTSEnabled.toggle()
+        saveState()
+    }
+    
+    // MARK: - Navigation
+    func jumpToBeginning() {
+        guard !textChunks.isEmpty else { return }
+        
+        audioManager.stop()
+        currentChunkIndex = 0
+        
+        if isPlaying {
+            speakCurrentChunk()
+        }
+        
+        saveState()
+    }
+    
+    func jumpToEnd() {
+        guard !textChunks.isEmpty else { return }
+        
+        audioManager.stop()
+        currentChunkIndex = textChunks.count - 1
+        
+        if isPlaying {
+            speakCurrentChunk()
+        }
+        
+        saveState()
+    }
+    
+    // MARK: - Font Size Controls
+    func increaseFontSize() {
+        fontSize = min(fontSize + 2, 32)  // Max 32pt
+        saveState()
+    }
+    
+    func decreaseFontSize() {
+        fontSize = max(fontSize - 2, 12)  // Min 12pt
+        saveState()
+    }
+    
+    func resetFontSize() {
+        fontSize = 17.0  // Default
+        saveState()
+    }
+    
     // MARK: - Error Handling
     private func showErrorMessage(_ message: String) {
         errorMessage = message

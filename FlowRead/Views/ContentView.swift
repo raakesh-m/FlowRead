@@ -28,6 +28,30 @@ struct ContentView: View {
     @State private var showFilePicker = false
     
     var body: some View {
+        mainContent
+            .fileImporter(
+                isPresented: $showFilePicker,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: false
+            ) { result in
+                handleFileSelection(result)
+            }
+            .alert("Error", isPresented: $appState.showError) {
+                Button("OK") { appState.dismissError() }
+            } message: {
+                Text(appState.errorMessage ?? "An unknown error occurred.")
+            }
+            .sheet(isPresented: $appState.showPreferences) {
+                PreferencesView()
+            }
+            .modifier(KeyboardShortcutsModifier(
+                appState: appState,
+                showFilePicker: $showFilePicker
+            ))
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
         ZStack {
             // Rich gradient background
             LinearGradient(
@@ -51,42 +75,6 @@ struct ContentView: View {
                 LoadingOverlay(message: appState.loadingMessage)
             }
         }
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [.pdf],
-            allowsMultipleSelection: false
-        ) { result in
-            handleFileSelection(result)
-        }
-        .alert("Error", isPresented: $appState.showError) {
-            Button("OK") { appState.dismissError() }
-        } message: {
-            Text(appState.errorMessage ?? "An unknown error occurred.")
-        }
-        .sheet(isPresented: $appState.showPreferences) {
-            PreferencesView()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openPDF)) { _ in
-            showFilePicker = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openPreferences)) { _ in
-            appState.showPreferences = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .togglePlayback)) { _ in
-            appState.togglePlayback()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .nextChunk)) { _ in
-            appState.nextChunk()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .previousChunk)) { _ in
-            appState.previousChunk()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .increaseSpeed)) { _ in
-            appState.increaseSpeed()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .decreaseSpeed)) { _ in
-            appState.decreaseSpeed()
-        }
     }
     
     private func handleFileSelection(_ result: Result<[URL], Error>) {
@@ -101,6 +89,68 @@ struct ContentView: View {
         case .failure(let error):
             print("File selection error: \(error)")
         }
+    }
+}
+
+// MARK: - Keyboard Shortcuts Modifier
+struct KeyboardShortcutsModifier: ViewModifier {
+    @ObservedObject var appState: AppState
+    @Binding var showFilePicker: Bool
+    
+    func body(content: Content) -> some View {
+        content
+            // File operations
+            .onReceive(NotificationCenter.default.publisher(for: .openPDF)) { _ in
+                showFilePicker = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openPreferences)) { _ in
+                appState.showPreferences = true
+            }
+            // Playback
+            .onReceive(NotificationCenter.default.publisher(for: .togglePlayback)) { _ in
+                appState.togglePlayback()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .stopPlayback)) { _ in
+                appState.stop()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .nextChunk)) { _ in
+                appState.nextChunk()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .previousChunk)) { _ in
+                appState.previousChunk()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .jumpToBeginning)) { _ in
+                appState.jumpToBeginning()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .jumpToEnd)) { _ in
+                appState.jumpToEnd()
+            }
+            // Speed
+            .onReceive(NotificationCenter.default.publisher(for: .increaseSpeed)) { _ in
+                appState.increaseSpeed()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .decreaseSpeed)) { _ in
+                appState.decreaseSpeed()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .resetSpeed)) { _ in
+                appState.resetSpeed()
+            }
+            // View
+            .onReceive(NotificationCenter.default.publisher(for: .toggleAutoScroll)) { _ in
+                appState.toggleAutoScroll()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .toggleTTS)) { _ in
+                appState.toggleTTS()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .increaseFontSize)) { _ in
+                appState.increaseFontSize()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .decreaseFontSize)) { _ in
+                appState.decreaseFontSize()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .resetFontSize)) { _ in
+                appState.resetFontSize()
+            }
     }
 }
 
