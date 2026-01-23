@@ -4,28 +4,56 @@
   <img src="docs/logo.png" alt="FlowRead Logo" width="128" height="128">
 </p>
 
-<h3 align="center">Read. Listen. Flow.</h3>
+<h3 align="center">Read • Listen • Flow</h3>
 
 <p align="center">
-  A native macOS PDF reader with intelligent Text-to-Speech, synchronized highlighting, and auto-scroll.
+  A native macOS PDF reader with intelligent Text-to-Speech, synchronized highlighting, smart auto-scroll, and comprehensive keyboard controls.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-13.0+-blue?logo=apple" alt="macOS 13.0+">
+  <img src="https://img.shields.io/badge/Swift-5.9-orange?logo=swift" alt="Swift 5.9">
+  <img src="https://img.shields.io/badge/SwiftUI-Native-green" alt="SwiftUI">
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT License">
 </p>
 
 ---
 
 ## ✨ Features
 
-- **📖 Native PDF Reading** - Load and read PDFs with a clean, distraction-free interface
-- **🎧 Text-to-Speech** - Listen to your documents using Groq's high-quality TTS API
-- **✨ Synchronized Highlighting** - See exactly which sentence is being read
-- **📜 Auto-Scroll** - The view automatically follows along with the audio
-- **⚡ Lightweight & Fast** - Native Swift/SwiftUI for minimal resource usage
-- **🔐 Privacy-First** - No analytics, no telemetry, all data stays local
+### Core Functionality
+- **📖 Native PDF Reading** — Load and read PDFs with a clean, distraction-free interface
+- **🎧 Text-to-Speech** — Listen to documents using Groq's Orpheus TTS with 6 professional voices
+- **✨ Synchronized Highlighting** — See exactly which sentence is being read in real-time
+- **📜 Smart Auto-Scroll** — View intelligently follows along, pauses when you scroll manually, and resumes on the next sentence
+
+### Audio & Playback
+- **🎚️ Variable Speed** — Adjust playback from 0.5x to 2.0x
+- **🎤 Voice Selection** — Choose from 6 distinct voices (Autumn, Diana, Hannah, Austin, Daniel, Troy)
+- **⏯️ Full Playback Control** — Play, pause, stop, skip forward/backward
+- **🔊 TTS Toggle** — Switch between audio+visual or visual-only mode
+
+### Smart Features
+- **🔤 Roman Numeral Detection** — Automatically converts standalone chapter markers (I, II, III) to spoken "Chapter 1, Chapter 2, Chapter 3"
+- **💾 Session Persistence** — Remembers your last PDF, exact reading position, speed, voice, and settings across app launches
+- **🔐 Security-Scoped Bookmarks** — Maintains file access even with macOS sandboxing
+
+### User Experience
+- **⌨️ Comprehensive Keyboard Shortcuts** — Control everything without touching the mouse
+- **📐 Responsive Design** — Adapts beautifully to any window size
+- **🎨 Modern Dark UI** — Vibrant gradients and smooth animations
+- **⚡ Lightweight & Fast** — Native Swift/SwiftUI for minimal resource usage
+- **🔐 Privacy-First** — No analytics, no telemetry, all data stays local
+
+---
 
 ## 📋 Requirements
 
 - macOS 13.0 (Ventura) or later
 - Xcode 15.0+ (for building from source)
 - Groq API key(s) for Text-to-Speech functionality
+
+---
 
 ## 🚀 Quick Start
 
@@ -41,7 +69,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/FlowRead.git
+git clone https://github.com/raakesh-m/FlowRead.git
 cd FlowRead
 
 # Build and create DMG
@@ -53,6 +81,8 @@ chmod +x run-debug.sh
 ./run-debug.sh
 ```
 
+---
+
 ## 🔑 API Key Configuration
 
 FlowRead requires Groq API keys for Text-to-Speech. You can configure up to 5 keys for automatic load balancing and failover.
@@ -61,7 +91,7 @@ FlowRead requires Groq API keys for Text-to-Speech. You can configure up to 5 ke
 
 ```bash
 export GROQ_API_KEY="your_key_here"
-# Or for multiple keys:
+# Or for multiple keys (recommended for rate limit handling):
 export GROQ_API_KEY_1="key_1"
 export GROQ_API_KEY_2="key_2"
 export GROQ_API_KEY_3="key_3"
@@ -85,54 +115,102 @@ Create `~/.flowread/api_keys.json`:
 
 Open Preferences (⌘,) → API Keys tab → Enter your keys
 
+---
+
 ## ⌨️ Keyboard Shortcuts
 
-| Action | Shortcut |
-|--------|----------|
-| Open PDF | ⌘O |
-| Play/Pause | Space |
-| Next Sentence | ⌘→ |
-| Previous Sentence | ⌘← |
-| Increase Speed | ⌘+ |
-| Decrease Speed | ⌘- |
-| Preferences | ⌘, |
+FlowRead features comprehensive keyboard controls inspired by media players like VLC and YouTube.
+
+### File Operations
+| Shortcut | Action |
+|----------|--------|
+| `⌘O` | Open PDF |
+| `⌘,` | Open Preferences |
+
+### Playback
+| Shortcut | Action |
+|----------|--------|
+| `Space` | Play / Pause |
+| `Esc` | Stop playback |
+| `←` | Previous sentence |
+| `→` | Next sentence |
+| `⌘↑` | Jump to beginning |
+| `⌘↓` | Jump to end |
+
+### Speed Control
+| Shortcut | Action |
+|----------|--------|
+| `↑` | Increase speed |
+| `↓` | Decrease speed |
+| `R` | Reset speed to 1.0x |
+
+### View & Features
+| Shortcut | Action |
+|----------|--------|
+| `A` | Toggle auto-scroll |
+| `T` | Toggle TTS on/off |
+| `⌘=` | Increase font size |
+| `⌘-` | Decrease font size |
+| `⌘0` | Reset font size |
+
+---
+
+## 🎤 Available Voices
+
+FlowRead uses Groq's Orpheus TTS model with 6 professionally-trained voices:
+
+| Voice | Gender | Description |
+|-------|--------|-------------|
+| **Autumn** | Female | Warm & natural |
+| **Diana** | Female | Clear & professional |
+| **Hannah** | Female | Calm & soothing |
+| **Austin** | Male | Deep & confident |
+| **Daniel** | Male | Friendly & expressive |
+| **Troy** | Male | Strong & articulate |
+
+---
 
 ## 📁 Project Structure
 
 ```
 FlowRead/
-├── FlowRead.xcodeproj/     # Xcode project
+├── FlowRead.xcodeproj/          # Xcode project
 ├── FlowRead/
-│   ├── FlowReadApp.swift   # App entry point
+│   ├── FlowReadApp.swift        # App entry point & menu commands
 │   ├── Models/
-│   │   ├── AppState.swift  # Central state management
-│   │   ├── TextChunk.swift # Text chunk model
-│   │   └── PersistedState.swift
+│   │   ├── AppState.swift       # Central state management
+│   │   ├── TextChunk.swift      # Text chunk model
+│   │   └── PersistedState.swift # Session persistence model
 │   ├── Services/
-│   │   ├── GroqTTSService.swift      # TTS API integration
-│   │   ├── AudioPlaybackManager.swift # Audio playback
-│   │   ├── PDFTextProcessor.swift    # PDF text extraction
+│   │   ├── GroqTTSService.swift      # TTS API with key rotation
+│   │   ├── AudioPlaybackManager.swift # AVFoundation audio
+│   │   ├── PDFTextProcessor.swift    # Smart text extraction
 │   │   └── PersistenceManager.swift  # Local storage
 │   ├── Views/
-│   │   ├── ContentView.swift         # Main view
+│   │   ├── ContentView.swift         # Main container
 │   │   ├── MainReadingView.swift     # Reading interface
-│   │   ├── ReadingPane.swift         # Text display
-│   │   ├── PlaybackControlBar.swift  # Playback controls
-│   │   └── PreferencesView.swift     # Settings
-│   ├── Theme/
-│   │   └── Theme.swift              # Color definitions
-│   └── Assets.xcassets/             # Colors & icons
-├── build.sh                # Release build script
-├── run-debug.sh           # Debug build script
+│   │   ├── ReadingPane.swift         # Smart auto-scrolling text
+│   │   ├── PlaybackControlBar.swift  # Control center
+│   │   └── PreferencesView.swift     # Settings tabs
+│   └── Assets.xcassets/              # Colors & icons
+├── docs/
+│   └── ARCHITECTURE.md          # Technical documentation
+├── build.sh                     # Release build script
+├── run-debug.sh                 # Debug build script
 └── README.md
 ```
 
+---
+
 ## 🎨 Design Principles
 
-- **Reliability over feature count** - Core features work flawlessly
-- **Simplicity over complexity** - Clean, focused interface
-- **Native performance** - No Electron, no web views
-- **Privacy first** - Your data stays on your device
+- **Reliability over feature count** — Core features work flawlessly
+- **Simplicity over complexity** — Clean, focused interface
+- **Native performance** — No Electron, no web views, pure Swift
+- **Privacy first** — Your data stays on your device
+- **Keyboard-first** — Everything accessible without a mouse
+
+---
 
 ## 🔧 Development
 
@@ -163,35 +241,65 @@ This will:
 2. Create an app bundle
 3. Generate a DMG installer in `build/FlowRead.dmg`
 
+---
+
 ## 📝 How It Works
 
-1. **PDF Loading**: Uses PDFKit to load and render PDF documents
-2. **Text Extraction**: Extracts text using PDFKit with NaturalLanguage framework for intelligent sentence splitting
-3. **TTS Synthesis**: Sends text chunks to Groq API, receives audio data
-4. **Audio Playback**: Uses AVFoundation for native audio playback with speed control
-5. **Synchronization**: Tracks current chunk index to sync highlighting and auto-scroll
-6. **Persistence**: Saves state to Application Support directory
+### 1. PDF Loading & Text Extraction
+- Uses **PDFKit** to load PDF documents
+- **NaturalLanguage framework** for intelligent sentence splitting
+- **Smart chapter detection** — Recognizes Roman numerals (I, II, III) as chapter markers and converts them to spoken form
+
+### 2. Text-to-Speech
+- Sends text chunks to **Groq's Orpheus API**
+- **Round-robin key rotation** with automatic failover
+- **Audio caching** — Pre-fetches upcoming sentences for seamless playback
+
+### 3. Audio Playback
+- **AVFoundation** for native audio with variable speed (0.5x - 2.0x)
+- Tracks chunk completion for synchronized progression
+
+### 4. Smart Auto-Scroll
+- Positions current sentence in the **upper 25%** of the screen for comfortable reading
+- **Pauses on manual scroll** — Shows a badge indicating pause status
+- **Auto-resumes** on next sentence change
+
+### 5. Session Persistence
+- **Security-scoped bookmarks** — Maintains PDF file access across launches
+- Saves reading position, speed, voice, font size, and all preferences
+- Automatically restores your last session on app launch
+
+---
 
 ## 🛡️ Security & Privacy
 
-- **No telemetry or analytics** - Zero data collection
-- **No cloud storage** - All data stored locally
-- **Minimal network usage** - Only Groq TTS API calls
-- **API keys secured** - Never logged or transmitted elsewhere
-- **Sandboxed** - macOS app sandbox for security
+- **No telemetry or analytics** — Zero data collection
+- **No cloud storage** — All data stored locally in Application Support
+- **Minimal network usage** — Only Groq TTS API calls
+- **API keys secured** — Stored locally, never logged or transmitted
+- **Sandboxed** — Full macOS app sandbox for security
+- **Security-scoped bookmarks** — Secure file access that persists across launches
+
+---
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) for details.
+MIT License — See [LICENSE](LICENSE) for details.
+
+---
 
 ## 🙏 Acknowledgments
 
-- [Groq](https://groq.com) for their excellent TTS API
-- Apple's PDFKit and AVFoundation frameworks
+- [Groq](https://groq.com) for their excellent Orpheus TTS API
+- Apple's PDFKit, AVFoundation, and NaturalLanguage frameworks
 - The Swift and SwiftUI communities
 
 ---
 
 <p align="center">
   Made with ❤️ for readers who love to listen
+</p>
+
+<p align="center">
+  <a href="https://github.com/raakesh-m/FlowRead">⭐ Star this repo if you find it useful!</a>
 </p>
