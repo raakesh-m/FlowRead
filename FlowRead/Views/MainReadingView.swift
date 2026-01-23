@@ -30,7 +30,6 @@ struct MainReadingView: View {
 
 struct TopToolbar: View {
     @EnvironmentObject var appState: AppState
-    @State private var showFilePicker = false
     
     // Responsive breakpoints
     private let compactWidth: CGFloat = 500
@@ -120,7 +119,9 @@ struct TopToolbar: View {
                     }
                     
                     ToolbarButton(icon: "folder", tooltip: "Open PDF", size: isMedium ? 32 : 40) {
-                        showFilePicker = true
+                        // Use NotificationCenter to trigger file picker in ContentView
+                        // This is more reliable than local state in nested views
+                        NotificationCenter.default.post(name: .openPDF, object: nil)
                     }
                     
                     ToolbarButton(icon: "gearshape", tooltip: "Preferences", size: isMedium ? 32 : 40) {
@@ -161,19 +162,6 @@ struct TopToolbar: View {
                 .frame(height: 1),
             alignment: .bottom
         )
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [.pdf],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                guard url.startAccessingSecurityScopedResource() else { return }
-                Task {
-                    await appState.loadPDF(from: url)
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-        }
     }
 }
 

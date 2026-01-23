@@ -28,7 +28,7 @@ class AppState: ObservableObject {
     @Published var isTTSEnabled: Bool = true
     @Published var fontSize: Double = 17.0
     @Published var lineSpacing: Double = 10.0
-    @Published var selectedVoice: String = GroqVoice.hannah.rawValue
+    @Published var selectedVoice: String = GroqVoice.tara.rawValue
     
     // MARK: - Services
     let audioManager: AudioPlaybackManager
@@ -98,22 +98,79 @@ class AppState: ObservableObject {
             }
         }
         
-        // Restore last opened PDF if available
-        if let lastPDFPath = state.lastPDFPath,
-           let url = URL(string: lastPDFPath),
-           FileManager.default.fileExists(atPath: url.path) {
-            Task {
-                await loadPDF(from: url, showError: false)
+        // Restore last opened PDF using security-scoped bookmark
+        Task {
+            if let restoredURL = await restoreLastPDF(from: state) {
+                await loadPDF(from: restoredURL, showError: false, isRestoring: true)
                 if let position = state.lastReadingPosition {
-                    self.currentChunkIndex = min(position, textChunks.count - 1)
+                    // Ensure position is valid after loading
+                    if !textChunks.isEmpty {
+                        self.currentChunkIndex = min(max(0, position), textChunks.count - 1)
+                    }
                 }
             }
         }
     }
     
+    /// Restore PDF access from security-scoped bookmark
+    private func restoreLastPDF(from state: PersistedState) async -> URL? {
+        // Try security-scoped bookmark first (best method)
+        if let bookmarkData = state.lastPDFBookmark {
+            do {
+                var isStale = false
+                let url = try URL(
+                    resolvingBookmarkData: bookmarkData,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                
+                // Start accessing the security-scoped resource
+                if url.startAccessingSecurityScopedResource() {
+                    print("[Session] Restored PDF from bookmark: \(url.lastPathComponent)")
+                    
+                    // If bookmark is stale, we'll create a new one when saving
+                    if isStale {
+                        print("[Session] Bookmark was stale, will refresh on save")
+                    }
+                    
+                    return url
+                }
+            } catch {
+                print("[Session] Failed to resolve bookmark: \(error)")
+            }
+        }
+        
+        // Fallback: Try the path directly (works for non-sandboxed or if file is in accessible location)
+        if let lastPDFPath = state.lastPDFPath,
+           let url = URL(string: lastPDFPath),
+           FileManager.default.fileExists(atPath: url.path) {
+            print("[Session] Trying direct path: \(url.lastPathComponent)")
+            return url
+        }
+        
+        return nil
+    }
+    
     func saveState() {
+        // Create security-scoped bookmark for the PDF
+        var bookmarkData: Data? = nil
+        if let url = pdfURL {
+            do {
+                bookmarkData = try url.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+                print("[Session] Created bookmark for: \(url.lastPathComponent)")
+            } catch {
+                print("[Session] Failed to create bookmark: \(error)")
+            }
+        }
+        
         let state = PersistedState(
             lastPDFPath: pdfURL?.absoluteString,
+            lastPDFBookmark: bookmarkData,
             lastReadingPosition: currentChunkIndex,
             playbackSpeed: playbackSpeed,
             autoScrollEnabled: autoScrollEnabled,
@@ -126,7 +183,7 @@ class AppState: ObservableObject {
     }
     
     // MARK: - PDF Loading
-    func loadPDF(from url: URL, showError: Bool = true) async {
+    func loadPDF(from url: URL, showError: Bool = true, isRestoring: Bool = false) async {
         isLoading = true
         loadingMessage = "Loading PDF..."
         
@@ -146,7 +203,12 @@ class AppState: ObservableObject {
         do {
             let chunks = try await pdfProcessor.extractTextChunks(from: document)
             self.textChunks = chunks
-            self.currentChunkIndex = 0
+            
+            // Only reset position if not restoring
+            if !isRestoring {
+                self.currentChunkIndex = 0
+            }
+            
             self.audioCache.removeAll()  // Clear cache for new document
             
             if chunks.isEmpty {
@@ -158,7 +220,11 @@ class AppState: ObservableObject {
         
         isLoading = false
         loadingMessage = ""
-        saveState()
+        
+        // Save state (creates new bookmark)
+        if !isRestoring {
+            saveState()
+        }
     }
     
     // MARK: - Playback Controls

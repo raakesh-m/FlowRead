@@ -510,76 +510,140 @@ struct VoicePickerPopover: View {
     @Environment(\.dismiss) var dismiss
     
     private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
+        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+    }
+    
+    // Group voices by gender
+    private var femaleVoices: [GroqVoice] {
+        GroqVoice.allCases.filter { $0.gender == "Female" }
+    }
+    
+    private var maleVoices: [GroqVoice] {
+        GroqVoice.allCases.filter { $0.gender == "Male" }
     }
     
     var body: some View {
-        VStack(spacing: 8) {
-            Text("SELECT VOICE")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(white: 0.5))
-                .tracking(2)
-                .padding(.bottom, 8)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text("SELECT VOICE")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color(white: 0.5))
+                    .tracking(2)
+                
+                Spacer()
+                
+                Text("\(GroqVoice.allCases.count) available")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(white: 0.4))
+            }
+            .padding(.bottom, 4)
             
-            ScrollView {
-                VStack(spacing: 6) {
-                    ForEach(GroqVoice.allCases) { voice in
-                        Button(action: {
-                            appState.updateVoice(voice)
-                            dismiss()
-                        }) {
-                            HStack {
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(
-                                        currentVoice == voice ?
-                                        Color(red: 0.36, green: 0.67, blue: 1.0) : Color(white: 0.5)
-                                    )
-                                
-                                Text(voice.displayName)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundColor(
-                                        currentVoice == voice ?
-                                        Color(red: 0.36, green: 0.67, blue: 1.0) : .white
-                                    )
-                                
-                                Spacer()
-                                
-                                if currentVoice == voice {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(red: 0.36, green: 0.67, blue: 1.0),
-                                                    Color(red: 0.69, green: 0.46, blue: 1.0)
-                                                ],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(
-                                        currentVoice == voice ?
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.12) :
-                                        Color.clear
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
+            // Female voices section
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.7))
+                    Text("FEMALE")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(Color(white: 0.5))
+                        .tracking(1)
+                }
+                .padding(.bottom, 2)
+                
+                ForEach(femaleVoices) { voice in
+                    VoiceOptionRow(voice: voice, isSelected: currentVoice == voice) {
+                        appState.updateVoice(voice)
+                        dismiss()
                     }
                 }
             }
-            .frame(maxHeight: 240)
+            
+            Divider()
+                .background(Color.white.opacity(0.1))
+            
+            // Male voices section
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(red: 0.6, green: 0.8, blue: 1.0))
+                    Text("MALE")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(Color(white: 0.5))
+                        .tracking(1)
+                }
+                .padding(.bottom, 2)
+                
+                ForEach(maleVoices) { voice in
+                    VoiceOptionRow(voice: voice, isSelected: currentVoice == voice) {
+                        appState.updateVoice(voice)
+                        dismiss()
+                    }
+                }
+            }
         }
         .padding(14)
-        .frame(width: 200)
+        .frame(width: 240)
         .background(Color(red: 0.12, green: 0.14, blue: 0.19))
+    }
+}
+
+// MARK: - Voice Option Row
+
+struct VoiceOptionRow: View {
+    let voice: GroqVoice
+    let isSelected: Bool
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                // Voice name and description
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(voice.displayName)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium, design: .rounded))
+                        .foregroundColor(
+                            isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0) : .white
+                        )
+                    
+                    Text(voice.description)
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(Color(white: 0.5))
+                }
+                
+                Spacer()
+                
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.36, green: 0.67, blue: 1.0),
+                                    Color(red: 0.69, green: 0.46, blue: 1.0)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(
+                        isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.12) :
+                        (isHovered ? Color.white.opacity(0.05) : Color.clear)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 

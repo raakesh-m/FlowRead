@@ -66,12 +66,8 @@ struct PreferencesView: View {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 1 }
                 }
                 
-                TabButton(title: "TTS", icon: "waveform", isSelected: selectedTab == 2) {
+                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 2) {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 2 }
-                }
-                
-                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 3) {
-                    withAnimation(.spring(response: 0.3)) { selectedTab = 3 }
                 }
             }
             .padding(.horizontal, 24)
@@ -86,8 +82,6 @@ struct PreferencesView: View {
                     case 1:
                         APIKeyPreferences()
                     case 2:
-                        TTSPreferences()
-                    case 3:
                         ReadingPreferences()
                     default:
                         EmptyView()
@@ -160,59 +154,124 @@ struct GeneralPreferences: View {
     let textWhite = Color.white
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     
+    private var currentVoice: GroqVoice {
+        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             PreferenceSection(title: "Playback", icon: "play.circle") {
                 VStack(alignment: .leading, spacing: 16) {
                     // Default speed
                     HStack {
-                        Text("Default Speed")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(textWhite)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Default Speed")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(textWhite)
+                            Text("Playback rate for audio")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.5))
+                        }
                         
                         Spacer()
                         
-                        Picker("", selection: $appState.playbackSpeed) {
+                        Menu {
                             ForEach(AppState.speedPresets, id: \.self) { speed in
-                                Text("\(speed, specifier: "%.1f")×").tag(speed)
-                                    .foregroundColor(.white)
+                                Button(action: {
+                                    appState.playbackSpeed = speed
+                                    appState.saveState()
+                                }) {
+                                    HStack {
+                                        Text("\(speed, specifier: "%.1f")×")
+                                        if appState.playbackSpeed == speed {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
                             }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("\(appState.playbackSpeed, specifier: "%.1f")×")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Color(white: 0.5))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(vibrantBlue.opacity(0.3), lineWidth: 1)
+                            )
                         }
-                        .frame(width: 80)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(6)
-                        .pickerStyle(.menu)
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
                     }
                     
                     // Voice Selection
                     HStack {
-                        Text("Voice")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(textWhite)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Default Voice")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(textWhite)
+                            Text("TTS voice for reading")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.5))
+                        }
                         
                         Spacer()
                         
-                        Picker("", selection: Binding(
-                            get: { GroqVoice(rawValue: appState.selectedVoice) ?? .hannah },
-                            set: { appState.updateVoice($0) }
-                        )) {
+                        Menu {
                             ForEach(GroqVoice.allCases) { voice in
-                                Text(voice.displayName).tag(voice)
-                                    .foregroundColor(.white)
+                                Button(action: {
+                                    appState.updateVoice(voice)
+                                }) {
+                                    HStack {
+                                        Text("\(voice.displayName) - \(voice.description)")
+                                        if currentVoice == voice {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
                             }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(currentVoice.displayName)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Color(white: 0.5))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(vibrantBlue.opacity(0.3), lineWidth: 1)
+                            )
                         }
-                        .frame(width: 140)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(6)
-                        .pickerStyle(.menu)
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
                     }
                     
                     // Auto-scroll toggle
                     ToggleRow(
                         title: "Auto-scroll",
-                        subtitle: "Keep current sentence centered",
+                        subtitle: "Keep current sentence visible during playback",
                         isOn: $appState.autoScrollEnabled
                     )
+                    .onChange(of: appState.autoScrollEnabled) { _ in
+                        appState.saveState()
+                    }
                 }
             }
             
@@ -239,8 +298,6 @@ struct GeneralPreferences: View {
 
 struct TTSPreferences: View {
     @EnvironmentObject var appState: AppState
-    @State private var selectedModel: String = "canopylabs/orpheus-v1-english"
-    @State private var selectedVoice: String = "hannah"
     
     // Colors
     let textWhite = Color.white
@@ -248,63 +305,68 @@ struct TTSPreferences: View {
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
     
-    // Available TTS Models
-    let ttsModels = [
-        ("canopylabs/orpheus-v1-english", "Orpheus English", "High-quality English TTS with vocal directions"),
-        ("canopylabs/orpheus-arabic-saudi", "Orpheus Arabic (Saudi)", "Arabic Saudi dialect TTS")
-    ]
+    private var currentVoice: GroqVoice {
+        GroqVoice(rawValue: appState.selectedVoice) ?? .tara
+    }
     
-    // Available Voices for English model
-    let englishVoices = ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe", "hannah", "troy", "austin"]
-    let arabicVoices = ["abdulrahman", "khalid", "fatima", "layla"]
+    // Group voices by gender
+    private var femaleVoices: [GroqVoice] {
+        GroqVoice.allCases.filter { $0.gender == "Female" }
+    }
     
-    var currentVoices: [String] {
-        selectedModel.contains("arabic") ? arabicVoices : englishVoices
+    private var maleVoices: [GroqVoice] {
+        GroqVoice.allCases.filter { $0.gender == "Male" }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // TTS Model Selection
-            PreferenceSection(title: "TTS Model", icon: "waveform") {
-                VStack(spacing: 12) {
-                    ForEach(ttsModels, id: \.0) { model in
-                        ModelSelectionRow(
-                            modelId: model.0,
-                            modelName: model.1,
-                            modelDescription: model.2,
-                            isSelected: selectedModel == model.0,
-                            action: {
-                                selectedModel = model.0
-                                // Reset voice when switching models
-                                selectedVoice = currentVoices.first ?? "hannah"
-                                saveSettings()
-                            }
-                        )
-                    }
-                }
-            }
-            
-            // Voice Selection
-            PreferenceSection(title: "Voice (\(currentVoices.count) available)", icon: "person.wave.2.fill") {
+            // Voice Selection - Female
+            PreferenceSection(title: "Female Voices (\(femaleVoices.count))", icon: "person.fill") {
                 VStack(spacing: 8) {
                     LazyVGrid(columns: [
                         GridItem(.flexible()),
                         GridItem(.flexible()),
                         GridItem(.flexible())
                     ], spacing: 8) {
-                        ForEach(currentVoices, id: \.self) { voice in
-                            VoiceChip(
-                                name: voice.capitalized,
-                                isSelected: selectedVoice == voice,
-                                action: {
-                                    selectedVoice = voice
-                                    if let voiceEnum = GroqVoice(rawValue: voice) {
-                                        appState.updateVoice(voiceEnum)
-                                    }
-                                }
+                        ForEach(femaleVoices) { voice in
+                            VoiceChipWithDescription(
+                                voice: voice,
+                                isSelected: currentVoice == voice,
+                                action: { appState.updateVoice(voice) }
                             )
                         }
                     }
+                }
+            }
+            
+            // Voice Selection - Male
+            PreferenceSection(title: "Male Voices (\(maleVoices.count))", icon: "person.fill") {
+                VStack(spacing: 8) {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 8) {
+                        ForEach(maleVoices) { voice in
+                            VoiceChipWithDescription(
+                                voice: voice,
+                                isSelected: currentVoice == voice,
+                                action: { appState.updateVoice(voice) }
+                            )
+                        }
+                    }
+                }
+            }
+            
+            // TTS Toggle
+            PreferenceSection(title: "Text-to-Speech", icon: "waveform") {
+                ToggleRow(
+                    title: "Enable TTS",
+                    subtitle: "Use Groq API for voice synthesis",
+                    isOn: $appState.isTTSEnabled
+                )
+                .onChange(of: appState.isTTSEnabled) { _ in
+                    appState.saveState()
                 }
             }
             
@@ -325,22 +387,46 @@ struct TTSPreferences: View {
                 }
             }
         }
-        .onAppear { loadSettings() }
     }
+}
+
+// MARK: - Voice Chip With Description
+
+struct VoiceChipWithDescription: View {
+    let voice: GroqVoice
+    let isSelected: Bool
+    let action: () -> Void
     
-    private func loadSettings() {
-        selectedVoice = appState.selectedVoice
-        // Load model from UserDefaults if saved
-        if let savedModel = UserDefaults.standard.string(forKey: "selectedTTSModel") {
-            selectedModel = savedModel
-        }
-    }
+    @State private var isHovered = false
     
-    private func saveSettings() {
-        UserDefaults.standard.set(selectedModel, forKey: "selectedTTSModel")
-        Task {
-            await appState.ttsService.setModel(selectedModel)
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(voice.displayName)
+                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? .white : Color(white: 0.8))
+                
+                Text(voice.description)
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(isSelected ? Color(white: 0.9) : Color(white: 0.5))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? vibrantBlue : Color.white.opacity(isHovered ? 0.1 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 

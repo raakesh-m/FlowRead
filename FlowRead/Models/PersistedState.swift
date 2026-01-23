@@ -6,6 +6,7 @@ import Foundation
 /// State that persists between app sessions
 struct PersistedState: Codable {
     var lastPDFPath: String?
+    var lastPDFBookmark: Data?  // Security-scoped bookmark for file access
     var lastReadingPosition: Int?
     var playbackSpeed: Double
     var autoScrollEnabled: Bool
@@ -16,6 +17,7 @@ struct PersistedState: Codable {
     
     init(
         lastPDFPath: String? = nil,
+        lastPDFBookmark: Data? = nil,
         lastReadingPosition: Int? = nil,
         playbackSpeed: Double = 1.0,
         autoScrollEnabled: Bool = true,
@@ -25,6 +27,7 @@ struct PersistedState: Codable {
         isTTSEnabled: Bool = true
     ) {
         self.lastPDFPath = lastPDFPath
+        self.lastPDFBookmark = lastPDFBookmark
         self.lastReadingPosition = lastReadingPosition
         self.playbackSpeed = playbackSpeed
         self.autoScrollEnabled = autoScrollEnabled
@@ -36,3 +39,4 @@ struct PersistedState: Codable {
     
     static let `default` = PersistedState()
 }
+
