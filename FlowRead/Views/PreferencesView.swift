@@ -84,7 +84,7 @@ struct PreferencesView: View {
                     case 0:
                         GeneralPreferences()
                     case 1:
-                        TTSEnginePreferences()
+                        TTSEnginePreferences(downloadManager: appState.modelDownloadManager)
                     case 2:
                         APIKeyPreferences()
                     case 3:

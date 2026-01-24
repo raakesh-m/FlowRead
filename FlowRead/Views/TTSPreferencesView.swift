@@ -6,10 +6,8 @@ import SwiftUI
 struct TTSEnginePreferences: View {
     @EnvironmentObject var appState: AppState
     
-    // Use the shared modelDownloadManager from appState
-    private var downloadManager: ModelDownloadManager {
-        appState.modelDownloadManager
-    }
+    // Observe the download manager directly for real-time updates
+    @ObservedObject var downloadManager: ModelDownloadManager
     
     // Colors
     let textWhite = Color.white
@@ -98,7 +96,8 @@ struct TTSEnginePreferences: View {
                             downloadManager.cancelPiperDownload(voice: appState.selectedPiperVoice)
                         },
                         deleteAction: {
-                            downloadManager.deletePiperModel(voice: appState.selectedPiperVoice)
+                            // Delete ALL Piper voices, not just selected
+                            downloadManager.deleteAllPiperModels()
                             if appState.selectedTTSEngine == .piper {
                                 appState.updateTTSEngine(.macOSNative)
                             }
@@ -182,7 +181,7 @@ struct TTSEnginePreferences: View {
                 KokoroVoiceSelection()
             }
         case .piper:
-            PiperVoiceSelection()
+            PiperVoiceSelection(downloadManager: downloadManager)
         }
     }
 }
@@ -214,6 +213,7 @@ struct TTSEngineRow: View {
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     let vibrantGreen = Color(red: 0.30, green: 0.78, blue: 0.47)
     let vibrantOrange = Color(red: 1.0, green: 0.62, blue: 0.04)
+    let textGray = Color(white: 0.8)
     
     var body: some View {
         VStack(spacing: 8) {
@@ -381,22 +381,37 @@ struct TTSEngineRow: View {
                 .buttonStyle(.plain)
             }
             
-        case .downloading:
-            if let cancelAction = cancelAction {
-                Button(action: cancelAction) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                        Text("Cancel")
-                            .font(.system(size: 11, weight: .medium))
+        case .downloading(let progress, let downloaded, let total):
+            VStack(alignment: .trailing, spacing: 4) {
+                // Progress Bar
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .foregroundColor(Color.gray.opacity(0.3))
+                            .cornerRadius(2)
+                        
+                        Rectangle()
+                            .foregroundColor(vibrantBlue)
+                            .frame(width: CGFloat(max(0, min(1, progress))) * geometry.size.width)
+                            .cornerRadius(2)
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(6)
                 }
-                .buttonStyle(.plain)
+                .frame(width: 80, height: 4)
+                
+                HStack(spacing: 4) {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(textGray)
+                    
+                    if let cancelAction = cancelAction {
+                        Button(action: cancelAction) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             
         case .deleting:
@@ -526,10 +541,7 @@ struct KokoroVoiceSelection: View {
 
 struct PiperVoiceSelection: View {
     @EnvironmentObject var appState: AppState
-    
-    private var downloadManager: ModelDownloadManager {
-        appState.modelDownloadManager
-    }
+    @ObservedObject var downloadManager: ModelDownloadManager
     
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     
@@ -550,6 +562,17 @@ struct PiperVoiceSelection: View {
                         downloadAction: {
                             Task {
                                 await downloadManager.downloadPiperModel(voice: voice)
+                            }
+                        },
+                        deleteAction: {
+                            downloadManager.deletePiperModel(voice: voice)
+                            // If deleting the currently selected voice, switch to the other one if available
+                            if appState.selectedPiperVoice == voice {
+                                // Switch to the other voice if it's downloaded
+                                let otherVoice: PiperVoice = voice == .amy_medium ? .ryan_medium : .amy_medium
+                                if isVoiceDownloaded(otherVoice) {
+                                    appState.updatePiperVoice(otherVoice)
+                                }
                             }
                         }
                     )
@@ -584,6 +607,7 @@ struct PiperVoiceRow: View {
     let downloadStatus: ModelDownloadStatus
     let action: () -> Void
     let downloadAction: () -> Void
+    var deleteAction: (() -> Void)? = nil
     
     @State private var isHovered = false
     
@@ -675,13 +699,26 @@ struct PiperVoiceRow: View {
     private var statusView: some View {
         switch downloadStatus {
         case .downloaded:
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(vibrantGreen)
-            } else {
-                Image(systemName: "checkmark")
-                    .foregroundColor(Color(white: 0.5))
-                    .font(.system(size: 12))
+            HStack(spacing: 6) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(vibrantGreen)
+                } else {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(Color(white: 0.5))
+                        .font(.system(size: 12))
+                }
+                
+                // Add delete button
+                if let deleteAction = deleteAction {
+                    Button(action: deleteAction) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 10))
+                            .foregroundColor(.red.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Delete \(voice.displayName)")
+                }
             }
             
         case .notDownloaded:
@@ -700,9 +737,14 @@ struct PiperVoiceRow: View {
             }
             .buttonStyle(.plain)
             
-        case .downloading:
-            ProgressView()
-                .scaleEffect(0.7)
+        case .downloading(let progress, _, _):
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.5)
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Color(white: 0.7))
+            }
             
         case .deleting:
             HStack(spacing: 4) {

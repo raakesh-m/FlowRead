@@ -145,6 +145,7 @@ class ModelDownloadManager: ObservableObject {
         
         let totalSize = KokoroModelURLs.modelSize + KokoroModelURLs.tokenizerSize + KokoroModelURLs.voiceSize
         kokoroStatus = .downloading(progress: 0, bytesDownloaded: 0, totalBytes: totalSize)
+        objectWillChange.send()
         
         do {
             // Download model file (~93 MB - 90% of total)
@@ -153,8 +154,8 @@ class ModelDownloadManager: ObservableObject {
                 from: KokoroModelURLs.modelURL,
                 to: Self.kokoroModelPath,
                 taskId: "kokoro_model"
-            ) { [weak self] progress, downloaded, total in
-                Task { @MainActor in
+            ) { [weak self] progress, downloaded, _ in
+                DispatchQueue.main.async {
                     let overallProgress = progress * 0.90
                     self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: downloaded, totalBytes: totalSize)
                 }
@@ -166,8 +167,8 @@ class ModelDownloadManager: ObservableObject {
                 from: KokoroModelURLs.tokenizerURL,
                 to: Self.kokoroTokenizerPath,
                 taskId: "kokoro_tokenizer"
-            ) { [weak self] progress, downloaded, total in
-                Task { @MainActor in
+            ) { [weak self] progress, downloaded, _ in
+                DispatchQueue.main.async {
                     let overallProgress = 0.90 + (progress * 0.07)
                     let overallDownloaded = KokoroModelURLs.modelSize + downloaded
                     self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: overallDownloaded, totalBytes: totalSize)
@@ -181,19 +182,34 @@ class ModelDownloadManager: ObservableObject {
                 from: KokoroModelURLs.voiceURL(for: defaultVoice),
                 to: Self.kokoroVoicePath(for: defaultVoice),
                 taskId: "kokoro_voice"
-            ) { [weak self] progress, downloaded, total in
-                Task { @MainActor in
+            ) { [weak self] progress, downloaded, _ in
+                DispatchQueue.main.async {
                     let overallProgress = 0.97 + (progress * 0.03)
                     let overallDownloaded = KokoroModelURLs.modelSize + KokoroModelURLs.tokenizerSize + downloaded
                     self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: overallDownloaded, totalBytes: totalSize)
                 }
             }
             
-            kokoroStatus = .downloaded
-            print("[ModelDownload] Kokoro model downloaded successfully!")
+            // Small delay to let any pending progress updates complete
+            try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
+            
+            // Verify files exist before marking as downloaded
+            let modelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
+            let tokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
+            let voiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: defaultVoice).path)
+            
+            if modelExists && tokenizerExists && voiceExists {
+                kokoroStatus = .downloaded
+                objectWillChange.send()
+                print("[ModelDownload] Kokoro model downloaded successfully!")
+            } else {
+                kokoroStatus = .failed(error: "Download completed but files not found")
+                print("[ModelDownload] Kokoro download verification failed")
+            }
             
         } catch {
             kokoroStatus = .failed(error: error.localizedDescription)
+            objectWillChange.send()
             print("[ModelDownload] Kokoro download failed: \(error)")
         }
     }
@@ -219,8 +235,8 @@ class ModelDownloadManager: ObservableObject {
                 from: voice.modelURL,
                 to: Self.piperModelPath(for: voice),
                 taskId: "piper_\(voice.rawValue)_model"
-            ) { [weak self] progress, downloaded, total in
-                Task { @MainActor in
+            ) { [weak self] progress, downloaded, _ in
+                DispatchQueue.main.async {
                     // Model is ~99% of download
                     let overallProgress = progress * 0.99
                     self?.updatePiperStatus(voice: voice, status: .downloading(progress: overallProgress, bytesDownloaded: downloaded, totalBytes: voice.downloadSize))
@@ -234,14 +250,26 @@ class ModelDownloadManager: ObservableObject {
                 to: Self.piperConfigPath(for: voice),
                 taskId: "piper_\(voice.rawValue)_config"
             ) { [weak self] progress, _, _ in
-                Task { @MainActor in
+                DispatchQueue.main.async {
                     let overallProgress = 0.99 + (progress * 0.01)
                     self?.updatePiperStatus(voice: voice, status: .downloading(progress: overallProgress, bytesDownloaded: voice.downloadSize, totalBytes: voice.downloadSize))
                 }
             }
             
-            updatePiperStatus(voice: voice, status: .downloaded)
-            print("[ModelDownload] Piper \(voice.displayName) downloaded successfully!")
+            // Small delay to let pending progress updates complete
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            
+            // Verify files exist
+            let modelExists = fileManager.fileExists(atPath: Self.piperModelPath(for: voice).path)
+            let configExists = fileManager.fileExists(atPath: Self.piperConfigPath(for: voice).path)
+            
+            if modelExists && configExists {
+                updatePiperStatus(voice: voice, status: .downloaded)
+                print("[ModelDownload] Piper \(voice.displayName) downloaded successfully!")
+            } else {
+                updatePiperStatus(voice: voice, status: .failed(error: "Download completed but files not found"))
+                print("[ModelDownload] Piper \(voice.displayName) verification failed")
+            }
             
         } catch {
             updatePiperStatus(voice: voice, status: .failed(error: error.localizedDescription))
@@ -256,6 +284,7 @@ class ModelDownloadManager: ObservableObject {
         case .ryan_medium:
             piperRyanStatus = status
         }
+        objectWillChange.send()
     }
     
     // MARK: - Cancel Download
@@ -280,46 +309,109 @@ class ModelDownloadManager: ObservableObject {
     
     // MARK: - Delete Model
     func deleteKokoroModel() {
-        guard !kokoroStatus.isDeleting else { return }
+        guard !kokoroStatus.isDeleting else { 
+            print("[ModelDownload] Already deleting Kokoro, ignoring")
+            return 
+        }
         
+        print("[ModelDownload] Starting Kokoro model deletion...")
         kokoroStatus = .deleting
-        print("[ModelDownload] Deleting Kokoro model...")
+        objectWillChange.send()
         
+        // Use regular Task to maintain MainActor context
         Task {
-            // Small delay to show the deleting state
-            try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2 seconds
+            // Small delay to allow UI to show deleting state
+            try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3 seconds
             
-            // Delete files
-            try? fileManager.removeItem(at: Self.kokoroModelPath)
-            try? fileManager.removeItem(at: Self.kokoroTokenizerPath)
-            
-            // Delete all voice files
-            for voice in KokoroVoice.allCases {
-                try? fileManager.removeItem(at: Self.kokoroVoicePath(for: voice))
+            // Delete files on background thread
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let fm = FileManager.default
+                    
+                    // Delete model file
+                    if fm.fileExists(atPath: Self.kokoroModelPath.path) {
+                        do {
+                            try fm.removeItem(at: Self.kokoroModelPath)
+                            print("[ModelDownload] Deleted: \(Self.kokoroModelPath.lastPathComponent)")
+                        } catch {
+                            print("[ModelDownload] Failed to delete model: \(error)")
+                        }
+                    }
+                    
+                    // Delete tokenizer file
+                    if fm.fileExists(atPath: Self.kokoroTokenizerPath.path) {
+                        do {
+                            try fm.removeItem(at: Self.kokoroTokenizerPath)
+                            print("[ModelDownload] Deleted: \(Self.kokoroTokenizerPath.lastPathComponent)")
+                        } catch {
+                            print("[ModelDownload] Failed to delete tokenizer: \(error)")
+                        }
+                    }
+                    
+                    // Delete all voice files
+                    for voice in KokoroVoice.allCases {
+                        let voicePath = Self.kokoroVoicePath(for: voice)
+                        if fm.fileExists(atPath: voicePath.path) {
+                            try? fm.removeItem(at: voicePath)
+                        }
+                    }
+                    
+                    continuation.resume()
+                }
             }
             
-            // Update state
+            // Update status on MainActor
             kokoroStatus = .notDownloaded
+            objectWillChange.send()
             print("[ModelDownload] Kokoro model deleted successfully")
         }
     }
     
     func deletePiperModel(voice: PiperVoice) {
         let currentStatus = voice == .amy_medium ? piperAmyStatus : piperRyanStatus
-        guard !currentStatus.isDeleting else { return }
+        guard !currentStatus.isDeleting else { 
+            print("[ModelDownload] Already deleting Piper \(voice.displayName), ignoring")
+            return 
+        }
         
+        print("[ModelDownload] Starting Piper \(voice.displayName) deletion...")
         updatePiperStatus(voice: voice, status: .deleting)
-        print("[ModelDownload] Deleting Piper \(voice.displayName)...")
         
         Task {
-            // Small delay to show the deleting state
-            try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2 seconds
+            // Small delay
+            try? await Task.sleep(nanoseconds: 300_000_000)
             
-            // Delete files
-            try? fileManager.removeItem(at: Self.piperModelPath(for: voice))
-            try? fileManager.removeItem(at: Self.piperConfigPath(for: voice))
+            let modelPath = Self.piperModelPath(for: voice)
+            let configPath = Self.piperConfigPath(for: voice)
             
-            // Update state
+            // Delete files on background thread
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let fm = FileManager.default
+                    
+                    if fm.fileExists(atPath: modelPath.path) {
+                        do {
+                            try fm.removeItem(at: modelPath)
+                            print("[ModelDownload] Deleted: \(modelPath.lastPathComponent)")
+                        } catch {
+                            print("[ModelDownload] Failed to delete model: \(error)")
+                        }
+                    }
+                    
+                    if fm.fileExists(atPath: configPath.path) {
+                        do {
+                            try fm.removeItem(at: configPath)
+                            print("[ModelDownload] Deleted: \(configPath.lastPathComponent)")
+                        } catch {
+                            print("[ModelDownload] Failed to delete config: \(error)")
+                        }
+                    }
+                    
+                    continuation.resume()
+                }
+            }
+            
+            // Update status
             updatePiperStatus(voice: voice, status: .notDownloaded)
             print("[ModelDownload] Piper \(voice.displayName) deleted successfully")
         }
@@ -386,19 +478,26 @@ class ModelDownloadManager: ObservableObject {
                 }
             }
             
-            // Observe progress
-            let observation = task.progress.observe(\.fractionCompleted) { progress, _ in
+            // Observe progress BEFORE resuming task
+            let observation = task.progress.observe(\.fractionCompleted, options: [.new]) { [weak task] progress, _ in
+                guard let task = task else { return }
                 let downloaded = task.countOfBytesReceived
-                let total = task.countOfBytesExpectedToReceive
-                progressHandler(progress.fractionCompleted, downloaded, total)
+                let total = max(task.countOfBytesExpectedToReceive, 1)  // Avoid division by zero
+                let fraction = total > 0 ? Double(downloaded) / Double(total) : progress.fractionCompleted
+                
+                // Dispatch to main thread for UI updates
+                DispatchQueue.main.async {
+                    progressHandler(fraction, downloaded, total)
+                }
             }
             
-            Task { @MainActor in
-                self.downloadTasks[taskId] = task
-                self.progressObservers[taskId] = observation
-            }
+            // Store task and observation
+            self.downloadTasks[taskId] = task
+            self.progressObservers[taskId] = observation
             
+            // Start the download
             task.resume()
+            print("[ModelDownload] Task \(taskId) started")
         }
     }
     
