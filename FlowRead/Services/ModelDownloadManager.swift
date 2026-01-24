@@ -34,8 +34,7 @@ class ModelDownloadManager: ObservableObject {
     
     // MARK: - Published State
     @Published var kokoroStatus: ModelDownloadStatus = .notDownloaded
-    @Published var piperAmyStatus: ModelDownloadStatus = .notDownloaded
-    @Published var piperRyanStatus: ModelDownloadStatus = .notDownloaded
+    @Published var piperStatus: ModelDownloadStatus = .notDownloaded
     
     // MARK: - Private Properties
     private var downloadTasks: [String: URLSessionDownloadTask] = [:]
@@ -89,39 +88,38 @@ class ModelDownloadManager: ObservableObject {
         if !kokoroStatus.isDownloading && !kokoroStatus.isDeleting {
             kokoroStatus = .notDownloaded
         }
-        if !piperAmyStatus.isDownloading && !piperAmyStatus.isDeleting {
-            piperAmyStatus = .notDownloaded
-        }
-        if !piperRyanStatus.isDownloading && !piperRyanStatus.isDeleting {
-            piperRyanStatus = .notDownloaded
-        }
-        
-        // Check Kokoro - need model, tokenizer, and at least one voice
-        let kokoroModelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
-        let kokoroTokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
-        let kokoroVoiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: .af_bella).path)
-        
-        print("[ModelDownload] Kokoro: model=\(kokoroModelExists), tokenizer=\(kokoroTokenizerExists), voice=\(kokoroVoiceExists)")
-        
-        if kokoroModelExists && kokoroTokenizerExists && kokoroVoiceExists {
-            kokoroStatus = .downloaded
-        }
-        
-        // Check Piper Amy
-        let amyExists = fileManager.fileExists(atPath: Self.piperModelPath(for: .amy_medium).path)
-        print("[ModelDownload] Piper Amy: exists=\(amyExists)")
-        if amyExists {
-            piperAmyStatus = .downloaded
-        }
-        
-        // Check Piper Ryan
-        let ryanExists = fileManager.fileExists(atPath: Self.piperModelPath(for: .ryan_medium).path)
-        print("[ModelDownload] Piper Ryan: exists=\(ryanExists)")
-        if ryanExists {
-            piperRyanStatus = .downloaded
-        }
-        
-        print("[ModelDownload] Status check complete - Kokoro: \(kokoroStatus), Amy: \(piperAmyStatus), Ryan: \(piperRyanStatus)")
+        if !piperStatus.isDownloading && !piperStatus.isDeleting {
+             piperStatus = .notDownloaded
+         }
+         
+         // Check Kokoro - need model, tokenizer, and at least one voice
+         let kokoroModelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
+         let kokoroTokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
+         let kokoroVoiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: .af_bella).path)
+         
+         print("[ModelDownload] Kokoro: model=\(kokoroModelExists), tokenizer=\(kokoroTokenizerExists), voice=\(kokoroVoiceExists)")
+         
+         if kokoroModelExists && kokoroTokenizerExists && kokoroVoiceExists {
+             kokoroStatus = .downloaded
+         }
+         
+         // Check Piper - need ALL voices for "Pack" status
+         var allPiperVoicesExist = true
+         for voice in PiperVoice.allCases {
+             let modelExists = fileManager.fileExists(atPath: Self.piperModelPath(for: voice).path)
+             let configExists = fileManager.fileExists(atPath: Self.piperConfigPath(for: voice).path)
+             if !modelExists || !configExists {
+                 allPiperVoicesExist = false
+                 break
+             }
+         }
+         
+         print("[ModelDownload] Piper Pack: exists=\(allPiperVoicesExist)")
+         if allPiperVoicesExist {
+             piperStatus = .downloaded
+         }
+         
+         print("[ModelDownload] Status check complete - Kokoro: \(kokoroStatus), Piper: \(piperStatus)")
     }
     
     // MARK: - Create Directory
@@ -215,76 +213,82 @@ class ModelDownloadManager: ObservableObject {
     }
     
     // MARK: - Download Piper Model
-    func downloadPiperModel(voice: PiperVoice) async {
-        let status = voice == .amy_medium ? piperAmyStatus : piperRyanStatus
-        guard !status.isDownloading && !status.isDownloaded else { return }
+    // MARK: - Download Piper Pack
+    private var piperBytesReceived: [String: Int64] = [:]
+    
+    func downloadPiperPack() async {
+        guard !piperStatus.isDownloading && !piperStatus.isDownloaded else { return }
         
         do {
             try ensureModelsDirectory()
         } catch {
-            updatePiperStatus(voice: voice, status: .failed(error: "Failed to create directory: \(error.localizedDescription)"))
+            piperStatus = .failed(error: "Failed to create directory: \(error.localizedDescription)")
             return
         }
         
-        updatePiperStatus(voice: voice, status: .downloading(progress: 0, bytesDownloaded: 0, totalBytes: voice.downloadSize))
+        let totalPackSize = PiperVoice.allCases.reduce(0) { $0 + $1.downloadSize }
+        piperStatus = .downloading(progress: 0, bytesDownloaded: 0, totalBytes: totalPackSize)
+        objectWillChange.send()
         
-        do {
-            // Download model file
-            print("[ModelDownload] Starting Piper \(voice.displayName) model download...")
-            try await downloadFile(
-                from: voice.modelURL,
-                to: Self.piperModelPath(for: voice),
-                taskId: "piper_\(voice.rawValue)_model"
-            ) { [weak self] progress, downloaded, _ in
-                DispatchQueue.main.async {
-                    // Model is ~99% of download
-                    let overallProgress = progress * 0.99
-                    self?.updatePiperStatus(voice: voice, status: .downloading(progress: overallProgress, bytesDownloaded: downloaded, totalBytes: voice.downloadSize))
+        piperBytesReceived.removeAll()
+        
+        await withTaskGroup(of: Void.self) { group in
+            for voice in PiperVoice.allCases {
+                // model
+                group.addTask {
+                    try? await self.downloadFile(
+                        from: voice.modelURL,
+                        to: Self.piperModelPath(for: voice),
+                        taskId: "piper_\(voice.rawValue)_model"
+                    ) { [weak self] _, downloaded, _ in
+                        Task { @MainActor in
+                            self?.updatePiperPackProgress(taskId: "piper_\(voice.rawValue)_model", downloaded: downloaded, totalPackSize: totalPackSize)
+                        }
+                    }
+                }
+                
+                // config
+                group.addTask {
+                    try? await self.downloadFile(
+                        from: voice.configURL,
+                        to: Self.piperConfigPath(for: voice),
+                        taskId: "piper_\(voice.rawValue)_config"
+                    ) { [weak self] _, downloaded, _ in
+                        Task { @MainActor in
+                            self?.updatePiperPackProgress(taskId: "piper_\(voice.rawValue)_config", downloaded: downloaded, totalPackSize: totalPackSize)
+                        }
+                    }
                 }
             }
-            
-            // Download config file (very small)
-            print("[ModelDownload] Starting Piper \(voice.displayName) config download...")
-            try await downloadFile(
-                from: voice.configURL,
-                to: Self.piperConfigPath(for: voice),
-                taskId: "piper_\(voice.rawValue)_config"
-            ) { [weak self] progress, _, _ in
-                DispatchQueue.main.async {
-                    let overallProgress = 0.99 + (progress * 0.01)
-                    self?.updatePiperStatus(voice: voice, status: .downloading(progress: overallProgress, bytesDownloaded: voice.downloadSize, totalBytes: voice.downloadSize))
-                }
+        }
+        
+        // Small delay
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        
+        // Verify ALL files
+        var allExist = true
+        for voice in PiperVoice.allCases {
+            if !fileManager.fileExists(atPath: Self.piperModelPath(for: voice).path) ||
+               !fileManager.fileExists(atPath: Self.piperConfigPath(for: voice).path) {
+                allExist = false
+                break
             }
-            
-            // Small delay to let pending progress updates complete
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            
-            // Verify files exist
-            let modelExists = fileManager.fileExists(atPath: Self.piperModelPath(for: voice).path)
-            let configExists = fileManager.fileExists(atPath: Self.piperConfigPath(for: voice).path)
-            
-            if modelExists && configExists {
-                updatePiperStatus(voice: voice, status: .downloaded)
-                print("[ModelDownload] Piper \(voice.displayName) downloaded successfully!")
-            } else {
-                updatePiperStatus(voice: voice, status: .failed(error: "Download completed but files not found"))
-                print("[ModelDownload] Piper \(voice.displayName) verification failed")
-            }
-            
-        } catch {
-            updatePiperStatus(voice: voice, status: .failed(error: error.localizedDescription))
-            print("[ModelDownload] Piper \(voice.displayName) download failed: \(error)")
+        }
+        
+        if allExist {
+            piperStatus = .downloaded
+            print("[ModelDownload] Piper Pack downloaded successfully!")
+        } else {
+            piperStatus = .failed(error: "Download incomplete")
+            print("[ModelDownload] Piper Pack verification failed")
         }
     }
     
-    private func updatePiperStatus(voice: PiperVoice, status: ModelDownloadStatus) {
-        switch voice {
-        case .amy_medium:
-            piperAmyStatus = status
-        case .ryan_medium:
-            piperRyanStatus = status
-        }
-        objectWillChange.send()
+    private func updatePiperPackProgress(taskId: String, downloaded: Int64, totalPackSize: Int64) {
+        piperBytesReceived[taskId] = downloaded
+        let totalDownloaded = piperBytesReceived.values.reduce(0, +)
+        let progress = Double(totalDownloaded) / Double(totalPackSize)
+        piperStatus = .downloading(progress: progress, bytesDownloaded: totalDownloaded, totalBytes: totalPackSize)
     }
     
     // MARK: - Cancel Download
@@ -301,13 +305,17 @@ class ModelDownloadManager: ObservableObject {
         kokoroStatus = .notDownloaded
     }
     
-    func cancelPiperDownload(voice: PiperVoice) {
-        cancelDownload(taskId: "piper_\(voice.rawValue)_model")
-        cancelDownload(taskId: "piper_\(voice.rawValue)_config")
-        updatePiperStatus(voice: voice, status: .notDownloaded)
+    // MARK: - Cancel Piper Pack
+    func cancelPiperPackDownload() {
+        for voice in PiperVoice.allCases {
+            cancelDownload(taskId: "piper_\(voice.rawValue)_model")
+            cancelDownload(taskId: "piper_\(voice.rawValue)_config")
+        }
+        piperBytesReceived.removeAll()
+        piperStatus = .notDownloaded
     }
-    
-    // MARK: - Delete Model
+
+    // MARK: - Delete Kokoro Model
     func deleteKokoroModel() {
         guard !kokoroStatus.isDeleting else { 
             print("[ModelDownload] Already deleting Kokoro, ignoring")
@@ -366,61 +374,36 @@ class ModelDownloadManager: ObservableObject {
             print("[ModelDownload] Kokoro model deleted successfully")
         }
     }
-    
-    func deletePiperModel(voice: PiperVoice) {
-        let currentStatus = voice == .amy_medium ? piperAmyStatus : piperRyanStatus
-        guard !currentStatus.isDeleting else { 
-            print("[ModelDownload] Already deleting Piper \(voice.displayName), ignoring")
-            return 
-        }
+
+    // MARK: - Delete Piper Pack
+    func deletePiperPack() {
+        guard !piperStatus.isDeleting else { return }
         
-        print("[ModelDownload] Starting Piper \(voice.displayName) deletion...")
-        updatePiperStatus(voice: voice, status: .deleting)
+        print("[ModelDownload] Starting Piper Pack deletion...")
+        piperStatus = .deleting
+        objectWillChange.send()
         
         Task {
-            // Small delay
             try? await Task.sleep(nanoseconds: 300_000_000)
             
-            let modelPath = Self.piperModelPath(for: voice)
-            let configPath = Self.piperConfigPath(for: voice)
-            
-            // Delete files on background thread
             await withCheckedContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     let fm = FileManager.default
                     
-                    if fm.fileExists(atPath: modelPath.path) {
-                        do {
-                            try fm.removeItem(at: modelPath)
-                            print("[ModelDownload] Deleted: \(modelPath.lastPathComponent)")
-                        } catch {
-                            print("[ModelDownload] Failed to delete model: \(error)")
-                        }
+                    for voice in PiperVoice.allCases {
+                        let model = Self.piperModelPath(for: voice)
+                        let config = Self.piperConfigPath(for: voice)
+                        
+                        try? fm.removeItem(at: model)
+                        try? fm.removeItem(at: config)
                     }
-                    
-                    if fm.fileExists(atPath: configPath.path) {
-                        do {
-                            try fm.removeItem(at: configPath)
-                            print("[ModelDownload] Deleted: \(configPath.lastPathComponent)")
-                        } catch {
-                            print("[ModelDownload] Failed to delete config: \(error)")
-                        }
-                    }
-                    
                     continuation.resume()
                 }
             }
             
-            // Update status
-            updatePiperStatus(voice: voice, status: .notDownloaded)
-            print("[ModelDownload] Piper \(voice.displayName) deleted successfully")
-        }
-    }
-    
-    /// Delete all Piper models
-    func deleteAllPiperModels() {
-        for voice in PiperVoice.allCases {
-            deletePiperModel(voice: voice)
+            piperStatus = .notDownloaded
+            print("[ModelDownload] Piper Pack deleted successfully")
+            objectWillChange.send()
         }
     }
     

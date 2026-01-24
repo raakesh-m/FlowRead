@@ -83,21 +83,20 @@ struct TTSEnginePreferences: View {
                         isSelected: appState.selectedTTSEngine == .piper,
                         status: downloadStatusForPiper,
                         action: {
-                            if downloadManager.piperAmyStatus.isDownloaded || downloadManager.piperRyanStatus.isDownloaded {
+                            if downloadManager.piperStatus.isDownloaded {
                                 appState.updateTTSEngine(.piper)
                             }
                         },
                         downloadAction: {
                             Task {
-                                await downloadManager.downloadPiperModel(voice: appState.selectedPiperVoice)
+                                await downloadManager.downloadPiperPack()
                             }
                         },
                         cancelAction: {
-                            downloadManager.cancelPiperDownload(voice: appState.selectedPiperVoice)
+                            downloadManager.cancelPiperPackDownload()
                         },
                         deleteAction: {
-                            // Delete ALL Piper voices, not just selected
-                            downloadManager.deleteAllPiperModels()
+                            downloadManager.deletePiperPack()
                             if appState.selectedTTSEngine == .piper {
                                 appState.updateTTSEngine(.macOSNative)
                             }
@@ -132,39 +131,18 @@ struct TTSEnginePreferences: View {
     }
     
     private var downloadStatusForPiper: TTSEngineStatus {
-        // Check if any voice is downloaded for Piper engine status
-        let amyDownloaded = downloadManager.piperAmyStatus.isDownloaded
-        let ryanDownloaded = downloadManager.piperRyanStatus.isDownloaded
-        let amyDeleting = downloadManager.piperAmyStatus.isDeleting
-        let ryanDeleting = downloadManager.piperRyanStatus.isDeleting
-        
-        // If any is deleting, show deleting
-        if amyDeleting || ryanDeleting {
-            return .deleting
-        }
-        
-        // If any is downloading, show downloading
-        if case .downloading(let progress, let downloaded, let total) = downloadManager.piperAmyStatus {
+        switch downloadManager.piperStatus {
+        case .notDownloaded:
+            return .needsDownload
+        case .downloading(let progress, let downloaded, let total):
             return .downloading(progress: progress, downloaded: downloaded, total: total)
-        }
-        if case .downloading(let progress, let downloaded, let total) = downloadManager.piperRyanStatus {
-            return .downloading(progress: progress, downloaded: downloaded, total: total)
-        }
-        
-        // If any is downloaded, show ready
-        if amyDownloaded || ryanDownloaded {
+        case .downloaded:
             return .ready
-        }
-        
-        // Check for errors
-        if case .failed(let error) = downloadManager.piperAmyStatus {
+        case .deleting:
+            return .deleting
+        case .failed(let error):
             return .error(message: error)
         }
-        if case .failed(let error) = downloadManager.piperRyanStatus {
-            return .error(message: error)
-        }
-        
-        return .needsDownload
     }
     
     // MARK: - Voice Selection Section
@@ -181,7 +159,9 @@ struct TTSEnginePreferences: View {
                 KokoroVoiceSelection()
             }
         case .piper:
-            PiperVoiceSelection(downloadManager: downloadManager)
+            if downloadManager.piperStatus.isDownloaded {
+                PiperVoiceSelection()
+            }
         }
     }
 }
@@ -541,236 +521,18 @@ struct KokoroVoiceSelection: View {
 
 struct PiperVoiceSelection: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject var downloadManager: ModelDownloadManager
-    
-    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     
     var body: some View {
         PreferenceSection(title: "Piper Voice", icon: "speaker.wave.3") {
-            VStack(spacing: 8) {
+            HStack(spacing: 8) {
                 ForEach(PiperVoice.allCases) { voice in
-                    PiperVoiceRow(
-                        voice: voice,
+                    VoiceOptionButton(
+                        name: voice.displayName,
+                        description: voice.description,
                         isSelected: appState.selectedPiperVoice == voice,
-                        isDownloaded: isVoiceDownloaded(voice),
-                        downloadStatus: downloadStatus(for: voice),
-                        action: {
-                            if isVoiceDownloaded(voice) {
-                                appState.updatePiperVoice(voice)
-                            }
-                        },
-                        downloadAction: {
-                            Task {
-                                await downloadManager.downloadPiperModel(voice: voice)
-                            }
-                        },
-                        deleteAction: {
-                            downloadManager.deletePiperModel(voice: voice)
-                            // If deleting the currently selected voice, switch to the other one if available
-                            if appState.selectedPiperVoice == voice {
-                                // Switch to the other voice if it's downloaded
-                                let otherVoice: PiperVoice = voice == .amy_medium ? .ryan_medium : .amy_medium
-                                if isVoiceDownloaded(otherVoice) {
-                                    appState.updatePiperVoice(otherVoice)
-                                }
-                            }
-                        }
+                        action: { appState.updatePiperVoice(voice) }
                     )
                 }
-            }
-        }
-    }
-    
-    private func isVoiceDownloaded(_ voice: PiperVoice) -> Bool {
-        switch voice {
-        case .amy_medium:
-            return downloadManager.piperAmyStatus.isDownloaded
-        case .ryan_medium:
-            return downloadManager.piperRyanStatus.isDownloaded
-        }
-    }
-    
-    private func downloadStatus(for voice: PiperVoice) -> ModelDownloadStatus {
-        switch voice {
-        case .amy_medium:
-            return downloadManager.piperAmyStatus
-        case .ryan_medium:
-            return downloadManager.piperRyanStatus
-        }
-    }
-}
-
-struct PiperVoiceRow: View {
-    let voice: PiperVoice
-    let isSelected: Bool
-    let isDownloaded: Bool
-    let downloadStatus: ModelDownloadStatus
-    let action: () -> Void
-    let downloadAction: () -> Void
-    var deleteAction: (() -> Void)? = nil
-    
-    @State private var isHovered = false
-    
-    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
-    let vibrantGreen = Color(red: 0.30, green: 0.78, blue: 0.47)
-    
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 12) {
-                // Selection indicator
-                ZStack {
-                    Circle()
-                        .strokeBorder(isSelected ? vibrantBlue : Color.white.opacity(0.3), lineWidth: 2)
-                        .frame(width: 18, height: 18)
-                    
-                    if isSelected {
-                        Circle()
-                            .fill(vibrantBlue)
-                            .frame(width: 10, height: 10)
-                    }
-                }
-                .opacity(isDownloaded ? 1 : 0.5)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(voice.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                    
-                    Text(voice.description)
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(white: 0.5))
-                }
-                
-                Spacer()
-                
-                statusView
-            }
-            .padding(10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? vibrantBlue.opacity(0.15) : Color.white.opacity(isHovered ? 0.08 : 0.04))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(isSelected ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if isDownloaded {
-                    action()
-                }
-            }
-            .onHover { isHovered = $0 }
-            
-            // Progress bar when downloading
-            if case .downloading(let progress, let downloaded, let total) = downloadStatus {
-                VStack(spacing: 2) {
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Rectangle()
-                                .fill(Color.white.opacity(0.1))
-                            
-                            Rectangle()
-                                .fill(vibrantBlue)
-                                .frame(width: geometry.size.width * progress)
-                        }
-                    }
-                    .frame(height: 4)
-                    .cornerRadius(2)
-                    
-                    HStack {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(Color(white: 0.6))
-                        
-                        Spacer()
-                        
-                        Text("\(ModelDownloadManager.formatBytes(downloaded)) / \(ModelDownloadManager.formatBytes(total))")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(Color(white: 0.6))
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var statusView: some View {
-        switch downloadStatus {
-        case .downloaded:
-            HStack(spacing: 6) {
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(vibrantGreen)
-                } else {
-                    Image(systemName: "checkmark")
-                        .foregroundColor(Color(white: 0.5))
-                        .font(.system(size: 12))
-                }
-                
-                // Add delete button
-                if let deleteAction = deleteAction {
-                    Button(action: deleteAction) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 10))
-                            .foregroundColor(.red.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Delete \(voice.displayName)")
-                }
-            }
-            
-        case .notDownloaded:
-            Button(action: downloadAction) {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 11))
-                    Text("~63 MB")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(vibrantBlue)
-                .cornerRadius(5)
-            }
-            .buttonStyle(.plain)
-            
-        case .downloading(let progress, _, _):
-            HStack(spacing: 4) {
-                ProgressView()
-                    .scaleEffect(0.5)
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(white: 0.7))
-            }
-            
-        case .deleting:
-            HStack(spacing: 4) {
-                ProgressView()
-                    .scaleEffect(0.6)
-                Text("...")
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(white: 0.5))
-            }
-            
-        case .failed(let error):
-            HStack(spacing: 4) {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.red)
-                    .font(.system(size: 12))
-                
-                Button(action: downloadAction) {
-                    Text("Retry")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.orange)
-                        .cornerRadius(4)
-                }
-                .buttonStyle(.plain)
             }
         }
     }

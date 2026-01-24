@@ -32,7 +32,7 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
         case .groqAPI:
             return "Cloud-based neural voices, requires API key"
         case .kokoro:
-            return "High-quality local AI model, 54 voices"
+            return "High-quality local AI model"
         case .piper:
             return "Lightweight local AI model, fast"
         }
@@ -70,9 +70,9 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
         case .macOSNative, .groqAPI:
             return 0
         case .kokoro:
-            return 90_000_000  // ~90 MB (quantized model + voices)
+            return 97_000_000  // ~97 MB (quantized model + voices)
         case .piper:
-            return 65_000_000  // ~65 MB (medium quality voice)
+            return 126_000_000  // ~126 MB (Amy + Ryan Medium)
         }
     }
     
@@ -81,9 +81,9 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
         case .macOSNative, .groqAPI:
             return "N/A"
         case .kokoro:
-            return "~90 MB"
+            return "~97 MB"
         case .piper:
-            return "~65 MB"
+            return "~126 MB"
         }
     }
     
