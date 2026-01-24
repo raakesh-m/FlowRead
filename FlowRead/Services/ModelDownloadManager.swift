@@ -9,6 +9,7 @@ enum ModelDownloadStatus: Equatable {
     case notDownloaded
     case downloading(progress: Double, bytesDownloaded: Int64, totalBytes: Int64)
     case downloaded
+    case deleting
     case failed(error: String)
     
     var isDownloading: Bool {
@@ -18,6 +19,11 @@ enum ModelDownloadStatus: Equatable {
     
     var isDownloaded: Bool {
         if case .downloaded = self { return true }
+        return false
+    }
+    
+    var isDeleting: Bool {
+        if case .deleting = self { return true }
         return false
     }
 }
@@ -77,24 +83,45 @@ class ModelDownloadManager: ObservableObject {
     
     // MARK: - Check Existing Models
     func checkExistingModels() {
-        // Check Kokoro - need model, tokenizer, and at least one voice
-        let hasModel = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
-        let hasTokenizer = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
-        let hasDefaultVoice = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: .af_bella).path)
+        print("[ModelDownload] Checking existing models...")
         
-        if hasModel && hasTokenizer && hasDefaultVoice {
+        // Reset all states first (unless currently downloading or deleting)
+        if !kokoroStatus.isDownloading && !kokoroStatus.isDeleting {
+            kokoroStatus = .notDownloaded
+        }
+        if !piperAmyStatus.isDownloading && !piperAmyStatus.isDeleting {
+            piperAmyStatus = .notDownloaded
+        }
+        if !piperRyanStatus.isDownloading && !piperRyanStatus.isDeleting {
+            piperRyanStatus = .notDownloaded
+        }
+        
+        // Check Kokoro - need model, tokenizer, and at least one voice
+        let kokoroModelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
+        let kokoroTokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
+        let kokoroVoiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: .af_bella).path)
+        
+        print("[ModelDownload] Kokoro: model=\(kokoroModelExists), tokenizer=\(kokoroTokenizerExists), voice=\(kokoroVoiceExists)")
+        
+        if kokoroModelExists && kokoroTokenizerExists && kokoroVoiceExists {
             kokoroStatus = .downloaded
         }
         
         // Check Piper Amy
-        if fileManager.fileExists(atPath: Self.piperModelPath(for: .amy_medium).path) {
+        let amyExists = fileManager.fileExists(atPath: Self.piperModelPath(for: .amy_medium).path)
+        print("[ModelDownload] Piper Amy: exists=\(amyExists)")
+        if amyExists {
             piperAmyStatus = .downloaded
         }
         
         // Check Piper Ryan
-        if fileManager.fileExists(atPath: Self.piperModelPath(for: .ryan_medium).path) {
+        let ryanExists = fileManager.fileExists(atPath: Self.piperModelPath(for: .ryan_medium).path)
+        print("[ModelDownload] Piper Ryan: exists=\(ryanExists)")
+        if ryanExists {
             piperRyanStatus = .downloaded
         }
+        
+        print("[ModelDownload] Status check complete - Kokoro: \(kokoroStatus), Amy: \(piperAmyStatus), Ryan: \(piperRyanStatus)")
     }
     
     // MARK: - Create Directory
@@ -253,21 +280,56 @@ class ModelDownloadManager: ObservableObject {
     
     // MARK: - Delete Model
     func deleteKokoroModel() {
-        try? fileManager.removeItem(at: Self.kokoroModelPath)
-        try? fileManager.removeItem(at: Self.kokoroTokenizerPath)
-        // Delete all voice files
-        for voice in KokoroVoice.allCases {
-            try? fileManager.removeItem(at: Self.kokoroVoicePath(for: voice))
+        guard !kokoroStatus.isDeleting else { return }
+        
+        kokoroStatus = .deleting
+        print("[ModelDownload] Deleting Kokoro model...")
+        
+        Task {
+            // Small delay to show the deleting state
+            try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2 seconds
+            
+            // Delete files
+            try? fileManager.removeItem(at: Self.kokoroModelPath)
+            try? fileManager.removeItem(at: Self.kokoroTokenizerPath)
+            
+            // Delete all voice files
+            for voice in KokoroVoice.allCases {
+                try? fileManager.removeItem(at: Self.kokoroVoicePath(for: voice))
+            }
+            
+            // Update state
+            kokoroStatus = .notDownloaded
+            print("[ModelDownload] Kokoro model deleted successfully")
         }
-        kokoroStatus = .notDownloaded
-        print("[ModelDownload] Kokoro model deleted")
     }
     
     func deletePiperModel(voice: PiperVoice) {
-        try? fileManager.removeItem(at: Self.piperModelPath(for: voice))
-        try? fileManager.removeItem(at: Self.piperConfigPath(for: voice))
-        updatePiperStatus(voice: voice, status: .notDownloaded)
-        print("[ModelDownload] Piper \(voice.displayName) deleted")
+        let currentStatus = voice == .amy_medium ? piperAmyStatus : piperRyanStatus
+        guard !currentStatus.isDeleting else { return }
+        
+        updatePiperStatus(voice: voice, status: .deleting)
+        print("[ModelDownload] Deleting Piper \(voice.displayName)...")
+        
+        Task {
+            // Small delay to show the deleting state
+            try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2 seconds
+            
+            // Delete files
+            try? fileManager.removeItem(at: Self.piperModelPath(for: voice))
+            try? fileManager.removeItem(at: Self.piperConfigPath(for: voice))
+            
+            // Update state
+            updatePiperStatus(voice: voice, status: .notDownloaded)
+            print("[ModelDownload] Piper \(voice.displayName) deleted successfully")
+        }
+    }
+    
+    /// Delete all Piper models
+    func deleteAllPiperModels() {
+        for voice in PiperVoice.allCases {
+            deletePiperModel(voice: voice)
+        }
     }
     
     // MARK: - Generic Download Helper

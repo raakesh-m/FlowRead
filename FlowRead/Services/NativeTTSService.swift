@@ -5,74 +5,34 @@ import Foundation
 import AppKit
 import AVFoundation
 
-/// Available macOS Native Voices (commonly available)
+/// Available macOS Native Voices
+/// Using actual voice names for reliable matching
 enum NativeVoice: String, CaseIterable, Identifiable, Codable {
-    // US English - Enhanced/Premium voices
-    case samantha = "com.apple.voice.enhanced.en-US.Samantha"
-    case allison = "com.apple.voice.enhanced.en-US.Allison"
-    case ava = "com.apple.voice.enhanced.en-US.Ava"
-    case tom = "com.apple.voice.enhanced.en-US.Tom"
-    case alex = "com.apple.voice.enhanced.en-US.Alex"
-    
-    // UK English
-    case daniel = "com.apple.voice.enhanced.en-GB.Daniel"
-    case kate = "com.apple.voice.enhanced.en-GB.Kate"
+    case samantha = "Samantha"
+    case daniel = "Daniel"
     
     var id: String { rawValue }
     
-    var displayName: String {
-        switch self {
-        case .samantha: return "Samantha"
-        case .alex: return "Alex"
-        case .allison: return "Allison"
-        case .ava: return "Ava"
-        case .tom: return "Tom"
-        case .daniel: return "Daniel"
-        case .kate: return "Kate"
-        }
-    }
+    var displayName: String { rawValue }
     
     var description: String {
         switch self {
         case .samantha: return "American Female - Clear"
-        case .alex: return "American Male - Classic"
-        case .allison: return "American Female - Friendly"
-        case .ava: return "American Female - Natural"
-        case .tom: return "American Male - Standard"
         case .daniel: return "British Male - Premium"
-        case .kate: return "British Female - Elegant"
         }
     }
     
     var gender: String {
         switch self {
-        case .samantha, .allison, .ava, .kate:
-            return "Female"
-        case .alex, .tom, .daniel:
-            return "Male"
+        case .samantha: return "Female"
+        case .daniel: return "Male"
         }
     }
     
     var accent: String {
         switch self {
-        case .samantha, .alex, .allison, .ava, .tom:
-            return "American"
-        case .daniel, .kate:
-            return "British"
-        }
-    }
-    
-    /// Get the NSSpeechSynthesizer voice name
-    var speechVoiceName: String {
-        // NSSpeechSynthesizer uses a different naming convention
-        switch self {
-        case .samantha: return "Samantha"
-        case .alex: return "Alex"
-        case .allison: return "Allison"
-        case .ava: return "Ava"
-        case .tom: return "Tom"
-        case .daniel: return "Daniel"
-        case .kate: return "Kate"
+        case .samantha: return "American"
+        case .daniel: return "British"
         }
     }
 }
@@ -96,14 +56,12 @@ class NativeTTSService: NSObject, ObservableObject {
         let availableVoices = NSSpeechSynthesizer.availableVoices
         print("[NativeTTS] Available voices: \(availableVoices.count)")
         
-        // Try to find a matching voice
-        if let voice = findBestVoice(for: selectedVoice) {
-            synthesizer = NSSpeechSynthesizer(voice: voice)
-            print("[NativeTTS] Using voice: \(voice.rawValue)")
-        } else if let defaultVoice = availableVoices.first {
-            synthesizer = NSSpeechSynthesizer(voice: defaultVoice)
-            print("[NativeTTS] Using default voice: \(defaultVoice.rawValue)")
+        // Try to find a matching voice by name
+        if let voiceName = findVoiceByName(selectedVoice.rawValue) {
+            synthesizer = NSSpeechSynthesizer(voice: voiceName)
+            print("[NativeTTS] Using voice: \(voiceName.rawValue)")
         } else {
+            // Default to system voice
             synthesizer = NSSpeechSynthesizer()
             print("[NativeTTS] Using system default voice")
         }
@@ -111,26 +69,42 @@ class NativeTTSService: NSObject, ObservableObject {
         synthesizer?.delegate = self
     }
     
-    private func findBestVoice(for voice: NativeVoice) -> NSSpeechSynthesizer.VoiceName? {
+    private func findVoiceByName(_ name: String) -> NSSpeechSynthesizer.VoiceName? {
         let availableVoices = NSSpeechSynthesizer.availableVoices
         
-        // First try exact match
-        if let found = availableVoices.first(where: { $0.rawValue.contains(voice.speechVoiceName) }) {
-            return found
+        // Search for voice by name in attributes
+        for voiceName in availableVoices {
+            let attrs = NSSpeechSynthesizer.attributes(forVoice: voiceName)
+            if let voiceNameAttr = attrs[.name] as? String {
+                if voiceNameAttr.lowercased() == name.lowercased() {
+                    // Also verify it's an English voice
+                    let lang = attrs[.localeIdentifier] as? String ?? ""
+                    if lang.hasPrefix("en") {
+                        return voiceName
+                    }
+                }
+            }
         }
         
-        // Try to find any English voice as fallback
-        return availableVoices.first(where: { voiceName in
-            let attrs = NSSpeechSynthesizer.attributes(forVoice: voiceName)
-            let lang = attrs[.localeIdentifier] as? String ?? ""
-            return lang.hasPrefix("en")
-        })
+        // Fallback: search in the voice identifier
+        for voiceName in availableVoices {
+            if voiceName.rawValue.contains(name) {
+                let attrs = NSSpeechSynthesizer.attributes(forVoice: voiceName)
+                let lang = attrs[.localeIdentifier] as? String ?? ""
+                if lang.hasPrefix("en") {
+                    return voiceName
+                }
+            }
+        }
+        
+        return nil
     }
     
     /// Set the voice for TTS
     func setVoice(_ voice: NativeVoice) {
         self.selectedVoice = voice
-        if let voiceName = findBestVoice(for: voice) {
+        
+        if let voiceName = findVoiceByName(voice.rawValue) {
             synthesizer?.setVoice(voiceName)
             print("[NativeTTS] Voice set to: \(voice.displayName)")
         } else {
@@ -161,7 +135,7 @@ class NativeTTSService: NSObject, ObservableObject {
         let tempFile = tempDir.appendingPathComponent("tts_output_\(UUID().uuidString).aiff")
         self.tempFileURL = tempFile
         
-        print("[NativeTTS] Synthesizing: '\(trimmedText.prefix(50))...' to \(tempFile.lastPathComponent)")
+        print("[NativeTTS] Synthesizing: '\(trimmedText.prefix(50))...' with \(selectedVoice.displayName)")
         
         return try await withCheckedThrowingContinuation { continuation in
             self.synthesisCompletion = { result in
@@ -192,8 +166,8 @@ class NativeTTSService: NSObject, ObservableObject {
         return synthesizer?.isSpeaking ?? false
     }
     
-    /// Get list of available system voices
-    static func getAvailableVoices() -> [(name: String, identifier: String)] {
+    /// Get list of available system voices (for debugging)
+    static func getAvailableVoices() -> [(name: String, identifier: String, locale: String)] {
         return NSSpeechSynthesizer.availableVoices.compactMap { voiceName in
             let attrs = NSSpeechSynthesizer.attributes(forVoice: voiceName)
             let name = attrs[.name] as? String ?? voiceName.rawValue
@@ -201,7 +175,7 @@ class NativeTTSService: NSObject, ObservableObject {
             
             // Only include English voices
             guard lang.hasPrefix("en") else { return nil }
-            return (name: name, identifier: voiceName.rawValue)
+            return (name: name, identifier: voiceName.rawValue, locale: lang)
         }
     }
 }
@@ -240,10 +214,6 @@ extension NativeTTSService: NSSpeechSynthesizerDelegate {
             }
             self.synthesisCompletion = nil
         }
-    }
-    
-    nonisolated func speechSynthesizer(_ sender: NSSpeechSynthesizer, willSpeakWord characterRange: NSRange, of string: String) {
-        // Progress callback - could be used for word highlighting
     }
 }
 

@@ -125,23 +125,47 @@ struct TTSEnginePreferences: View {
             return .downloading(progress: progress, downloaded: downloaded, total: total)
         case .downloaded:
             return .ready
+        case .deleting:
+            return .deleting
         case .failed(let error):
             return .error(message: error)
         }
     }
     
     private var downloadStatusForPiper: TTSEngineStatus {
-        let status = appState.selectedPiperVoice == .amy_medium ? downloadManager.piperAmyStatus : downloadManager.piperRyanStatus
-        switch status {
-        case .notDownloaded:
-            return .needsDownload
-        case .downloading(let progress, let downloaded, let total):
+        // Check if any voice is downloaded for Piper engine status
+        let amyDownloaded = downloadManager.piperAmyStatus.isDownloaded
+        let ryanDownloaded = downloadManager.piperRyanStatus.isDownloaded
+        let amyDeleting = downloadManager.piperAmyStatus.isDeleting
+        let ryanDeleting = downloadManager.piperRyanStatus.isDeleting
+        
+        // If any is deleting, show deleting
+        if amyDeleting || ryanDeleting {
+            return .deleting
+        }
+        
+        // If any is downloading, show downloading
+        if case .downloading(let progress, let downloaded, let total) = downloadManager.piperAmyStatus {
             return .downloading(progress: progress, downloaded: downloaded, total: total)
-        case .downloaded:
+        }
+        if case .downloading(let progress, let downloaded, let total) = downloadManager.piperRyanStatus {
+            return .downloading(progress: progress, downloaded: downloaded, total: total)
+        }
+        
+        // If any is downloaded, show ready
+        if amyDownloaded || ryanDownloaded {
             return .ready
-        case .failed(let error):
+        }
+        
+        // Check for errors
+        if case .failed(let error) = downloadManager.piperAmyStatus {
             return .error(message: error)
         }
+        if case .failed(let error) = downloadManager.piperRyanStatus {
+            return .error(message: error)
+        }
+        
+        return .needsDownload
     }
     
     // MARK: - Voice Selection Section
@@ -169,6 +193,7 @@ enum TTSEngineStatus {
     case ready
     case needsDownload
     case downloading(progress: Double, downloaded: Int64, total: Int64)
+    case deleting
     case error(message: String)
 }
 
@@ -301,7 +326,7 @@ struct TTSEngineRow: View {
         switch status {
         case .ready:
             return true
-        case .needsDownload, .downloading, .error:
+        case .needsDownload, .downloading, .deleting, .error:
             return false
         }
     }
@@ -374,6 +399,16 @@ struct TTSEngineRow: View {
                 .buttonStyle(.plain)
             }
             
+        case .deleting:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .frame(width: 16, height: 16)
+                Text("Deleting...")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(white: 0.6))
+            }
+            
         case .error(let message):
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Error")
@@ -412,7 +447,6 @@ struct NativeVoiceSelection: View {
         PreferenceSection(title: "macOS Voice", icon: "speaker.wave.2") {
             LazyVGrid(columns: [
                 GridItem(.flexible()),
-                GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 8) {
                 ForEach(NativeVoice.allCases) { voice in
@@ -424,6 +458,12 @@ struct NativeVoiceSelection: View {
                     )
                 }
             }
+            
+            // Note about available voices
+            Text("Only Samantha and Daniel are currently supported for best quality.")
+                .font(.system(size: 10))
+                .foregroundColor(Color(white: 0.5))
+                .padding(.top, 4)
         }
     }
 }
@@ -663,6 +703,15 @@ struct PiperVoiceRow: View {
         case .downloading:
             ProgressView()
                 .scaleEffect(0.7)
+            
+        case .deleting:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .scaleEffect(0.6)
+                Text("...")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(white: 0.5))
+            }
             
         case .failed(let error):
             HStack(spacing: 4) {
