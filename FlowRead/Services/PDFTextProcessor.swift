@@ -388,35 +388,146 @@ class PDFTextProcessor {
         return chunks
     }
     
-    /// Split long sentence into smaller chunks
+    /// Split long sentence into smaller chunks using natural break points
+    /// Finds the LAST natural break before 200 characters for better TTS flow
     private func splitLongSentence(_ sentence: String, pageIndex: Int) -> [TextChunk] {
+        let maxLength = 200
         var chunks: [TextChunk] = []
+        var remainingText = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Split on commas, semicolons, or colons first
-        let delimiters = CharacterSet(charactersIn: ",;:")
-        let parts = sentence.components(separatedBy: delimiters)
-        
-        var currentChunk = ""
-        
-        for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty { continue }
+        while !remainingText.isEmpty {
+            // If remaining text is under limit, we're done
+            if remainingText.count <= maxLength {
+                chunks.append(TextChunk(text: remainingText, pageIndex: pageIndex))
+                break
+            }
             
-            if currentChunk.isEmpty {
-                currentChunk = trimmed
-            } else if (currentChunk + ", " + trimmed).count <= 200 {
-                currentChunk += ", " + trimmed
+            // Find the best break point BEFORE maxLength
+            let searchRange = String(remainingText.prefix(maxLength))
+            
+            if let breakIndex = findBestBreakPoint(in: searchRange) {
+                // Split at the natural break point
+                let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakIndex)
+                let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if !chunk.isEmpty {
+                    chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                }
+                
+                // Move past the break point
+                remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                // Remove leading punctuation/delimiter if present
+                remainingText = removeLeadingDelimiters(remainingText)
             } else {
-                chunks.append(TextChunk(text: currentChunk, pageIndex: pageIndex))
-                currentChunk = trimmed
+                // No natural break found - find any space to avoid cutting mid-word
+                if let lastSpaceIndex = searchRange.lastIndex(of: " ") {
+                    let breakOffset = searchRange.distance(from: searchRange.startIndex, to: lastSpaceIndex)
+                    let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                    let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !chunk.isEmpty {
+                        chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    }
+                    
+                    remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    // No space found - hard cut (extremely rare edge case)
+                    let chunk = String(remainingText.prefix(maxLength))
+                    chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    remainingText = String(remainingText.dropFirst(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
             }
         }
         
-        if !currentChunk.isEmpty {
-            chunks.append(TextChunk(text: currentChunk, pageIndex: pageIndex))
+        return chunks
+    }
+    
+    /// Find the best natural break point in the text for TTS
+    /// Returns the index AFTER which to break (includes the delimiter)
+    private func findBestBreakPoint(in text: String) -> Int? {
+        // Define break patterns in priority order (higher priority = better break)
+        // We search for the LAST occurrence of each, preferring higher priority breaks
+        
+        struct BreakPoint {
+            let index: Int
+            let priority: Int
+            let includeDelimiter: Bool
         }
         
-        return chunks
+        var bestBreak: BreakPoint? = nil
+        
+        // Priority 1: Semicolons and colons (strongest breaks)
+        for (index, char) in text.enumerated() {
+            if char == ";" || char == ":" {
+                let newBreak = BreakPoint(index: index + 1, priority: 3, includeDelimiter: true)
+                if bestBreak == nil || newBreak.priority > bestBreak!.priority || 
+                   (newBreak.priority == bestBreak!.priority && newBreak.index > bestBreak!.index) {
+                    bestBreak = newBreak
+                }
+            }
+        }
+        
+        // Priority 2: Em-dashes (— or --)
+        if let dashRange = text.range(of: "—", options: .backwards) {
+            let index = text.distance(from: text.startIndex, to: dashRange.upperBound)
+            let newBreak = BreakPoint(index: index, priority: 2, includeDelimiter: true)
+            if bestBreak == nil || (newBreak.priority >= bestBreak!.priority && newBreak.index > bestBreak!.index) {
+                bestBreak = newBreak
+            }
+        }
+        if let dashRange = text.range(of: "--", options: .backwards) {
+            let index = text.distance(from: text.startIndex, to: dashRange.upperBound)
+            let newBreak = BreakPoint(index: index, priority: 2, includeDelimiter: true)
+            if bestBreak == nil || (newBreak.priority >= bestBreak!.priority && newBreak.index > bestBreak!.index) {
+                bestBreak = newBreak
+            }
+        }
+        
+        // Priority 3: Commas (good natural pauses) - find the LAST comma
+        if let commaIndex = text.lastIndex(of: ",") {
+            let index = text.distance(from: text.startIndex, to: commaIndex) + 1
+            let newBreak = BreakPoint(index: index, priority: 1, includeDelimiter: true)
+            // Only use comma if we don't have a better break, or this comma is after our current break
+            if bestBreak == nil || newBreak.index > bestBreak!.index {
+                bestBreak = newBreak
+            }
+        }
+        
+        // Priority 4: Conjunctions with spaces (", and ", ", but ", ", or ", ", yet ")
+        // These create natural speech pauses
+        let conjunctionPatterns = [", and ", ", but ", ", or ", ", yet ", " and ", " but ", " or "]
+        for pattern in conjunctionPatterns {
+            if let range = text.range(of: pattern, options: .backwards) {
+                // Break BEFORE the conjunction (keep conjunction with next chunk)
+                let index = text.distance(from: text.startIndex, to: range.lowerBound)
+                if index > 0 {  // Must have some content before
+                    let newBreak = BreakPoint(index: index, priority: 0, includeDelimiter: false)
+                    if bestBreak == nil || newBreak.index > bestBreak!.index {
+                        bestBreak = newBreak
+                    }
+                }
+            }
+        }
+        
+        // Ensure break point is not too early (at least 50 chars for meaningful chunk)
+        if let breakPoint = bestBreak, breakPoint.index >= 50 {
+            return breakPoint.index
+        }
+        
+        return nil
+    }
+    
+    /// Remove leading delimiters and whitespace from text
+    private func removeLeadingDelimiters(_ text: String) -> String {
+        var result = text
+        let delimiters: Set<Character> = [",", ";", ":", "—", "-"]
+        
+        while let first = result.first, delimiters.contains(first) || first.isWhitespace {
+            result.removeFirst()
+        }
+        
+        return result
     }
     
     /// Split text into paragraphs
