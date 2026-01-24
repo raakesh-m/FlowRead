@@ -30,11 +30,19 @@ class AppState: ObservableObject {
     @Published var lineSpacing: Double = 10.0
     @Published var selectedVoice: String = GroqVoice.hannah.rawValue
     
+    // MARK: - TTS Engine State
+    @Published var selectedTTSEngine: TTSEngine = .macOSNative
+    @Published var selectedNativeVoice: NativeVoice = .samantha
+    @Published var selectedKokoroVoice: KokoroVoice = .af_bella
+    @Published var selectedPiperVoice: PiperVoice = .amy_medium
+    
     // MARK: - Services
     let audioManager: AudioPlaybackManager
     let ttsService: GroqTTSService
+    let ttsManager: TTSManager
     let persistenceManager: PersistenceManager
     let pdfProcessor: PDFTextProcessor
+    let modelDownloadManager: ModelDownloadManager
     
     // MARK: - Cancellables
     private var cancellables = Set<AnyCancellable>()
@@ -48,8 +56,10 @@ class AppState: ObservableObject {
     init() {
         self.audioManager = AudioPlaybackManager()
         self.ttsService = GroqTTSService()
+        self.ttsManager = TTSManager(groqService: ttsService)
         self.persistenceManager = PersistenceManager()
         self.pdfProcessor = PDFTextProcessor()
+        self.modelDownloadManager = ModelDownloadManager()
         
         setupBindings()
         loadPersistedState()
@@ -96,6 +106,27 @@ class AppState: ObservableObject {
                     await ttsService.setVoice(voice)
                 }
             }
+        }
+        
+        // Load TTS Engine settings
+        if let engineID = state.selectedTTSEngine, let engine = TTSEngine(rawValue: engineID) {
+            self.selectedTTSEngine = engine
+            ttsManager.setEngine(engine)
+        }
+        
+        if let nativeVoiceID = state.selectedNativeVoice, let voice = NativeVoice(rawValue: nativeVoiceID) {
+            self.selectedNativeVoice = voice
+            ttsManager.setNativeVoice(voice)
+        }
+        
+        if let kokoroVoiceID = state.selectedKokoroVoice, let voice = KokoroVoice(rawValue: kokoroVoiceID) {
+            self.selectedKokoroVoice = voice
+            ttsManager.setKokoroVoice(voice)
+        }
+        
+        if let piperVoiceID = state.selectedPiperVoice, let voice = PiperVoice(rawValue: piperVoiceID) {
+            self.selectedPiperVoice = voice
+            ttsManager.setPiperVoice(voice)
         }
         
         // Restore last opened PDF using security-scoped bookmark
@@ -177,7 +208,11 @@ class AppState: ObservableObject {
             selectedVoice: selectedVoice,
             fontSize: fontSize,
             lineSpacing: lineSpacing,
-            isTTSEnabled: isTTSEnabled
+            isTTSEnabled: isTTSEnabled,
+            selectedTTSEngine: selectedTTSEngine.rawValue,
+            selectedNativeVoice: selectedNativeVoice.rawValue,
+            selectedKokoroVoice: selectedKokoroVoice.rawValue,
+            selectedPiperVoice: selectedPiperVoice.rawValue
         )
         persistenceManager.saveState(state)
     }
@@ -329,7 +364,7 @@ class AppState: ObservableObject {
         
             do {
                 // Check if text is valid before showing loading
-                let isValid = await ttsService.isValidForTTS(chunk.text)
+                let isValid = ttsManager.isValidForTTS(chunk.text)
                 
                 if !isValid {
                     // Skip this chunk silently and move to next
@@ -345,9 +380,10 @@ class AppState: ObservableObject {
                 
                 // Only show loading if not cached
                 isLoading = true
-                loadingMessage = "Generating audio..."
+                loadingMessage = "Generating audio (\(selectedTTSEngine.displayName))..."
                 
-                let audioData = try await ttsService.synthesize(text: chunk.text)
+                // Use TTSManager to synthesize using the selected engine
+                let audioData = try await ttsManager.synthesize(text: chunk.text)
                 
                 isLoading = false
                 loadingMessage = ""
@@ -376,6 +412,10 @@ class AppState: ObservableObject {
                 isLoading = false
                 loadingMessage = ""
                 handleTTSError(error)
+            } catch let error as NativeTTSError {
+                isLoading = false
+                loadingMessage = ""
+                showErrorMessage("Native TTS error: \(error.localizedDescription)")
             } catch {
                 isLoading = false
                 loadingMessage = ""
@@ -388,32 +428,30 @@ class AppState: ObservableObject {
     private func prefetchUpcomingChunks() {
         let chunksToPreFetch = 3  // Pre-fetch next 3 chunks
         
-        Task.detached { [weak self] in
+        Task { [weak self] in
             guard let self = self else { return }
             
             for offset in 1...chunksToPreFetch {
-                let index = await self.currentChunkIndex + offset
-                let chunks = await self.textChunks
+                let index = self.currentChunkIndex + offset
+                let chunks = self.textChunks
                 
                 // Check bounds
                 guard index < chunks.count else { break }
                 
                 // Skip if already cached
-                let isCached = await self.audioCache[index] != nil
+                let isCached = self.audioCache[index] != nil
                 if isCached { continue }
                 
                 // Skip if not valid
                 let text = chunks[index].text
-                let isValid = await self.ttsService.isValidForTTS(text)
+                let isValid = self.ttsManager.isValidForTTS(text)
                 guard isValid else { continue }
                 
-                // Synthesize in background
+                // Synthesize in background using TTSManager
                 do {
-                    if let audio = try await self.ttsService.synthesize(text: text) {
-                        await MainActor.run {
-                            self.audioCache[index] = audio
-                            print("[TTS Prefetch] Cached chunk \(index)")
-                        }
+                    if let audio = try await self.ttsManager.synthesize(text: text) {
+                        self.audioCache[index] = audio
+                        print("[TTS Prefetch] Cached chunk \(index)")
                     }
                 } catch {
                     print("[TTS Prefetch] Failed for chunk \(index): \(error.localizedDescription)")
@@ -563,5 +601,45 @@ class AppState: ObservableObject {
             await ttsService.setVoice(voice)
             saveState()
         }
+    }
+    
+    // MARK: - TTS Engine Management
+    
+    func updateTTSEngine(_ engine: TTSEngine) {
+        selectedTTSEngine = engine
+        audioCache.removeAll()  // Clear cache when switching engines
+        ttsManager.setEngine(engine)
+        saveState()
+    }
+    
+    func updateNativeVoice(_ voice: NativeVoice) {
+        selectedNativeVoice = voice
+        audioCache.removeAll()  // Clear cache when switching voices
+        ttsManager.setNativeVoice(voice)
+        saveState()
+    }
+    
+    func updateKokoroVoice(_ voice: KokoroVoice) {
+        selectedKokoroVoice = voice
+        audioCache.removeAll()
+        ttsManager.setKokoroVoice(voice)
+        saveState()
+    }
+    
+    func updatePiperVoice(_ voice: PiperVoice) {
+        selectedPiperVoice = voice
+        audioCache.removeAll()
+        ttsManager.setPiperVoice(voice)
+        saveState()
+    }
+    
+    /// Check if current TTS engine is ready to use
+    func isTTSEngineReady() -> Bool {
+        return ttsManager.isEngineReady()
+    }
+    
+    /// Get status message for current TTS engine
+    func getTTSEngineStatus() -> String {
+        return ttsManager.getEngineStatus()
     }
 }

@@ -15,6 +15,12 @@ struct PersistedState: Codable {
     var lineSpacing: Double?
     var isTTSEnabled: Bool
     
+    // TTS Engine settings
+    var selectedTTSEngine: String?
+    var selectedNativeVoice: String?
+    var selectedKokoroVoice: String?
+    var selectedPiperVoice: String?
+    
     init(
         lastPDFPath: String? = nil,
         lastPDFBookmark: Data? = nil,
@@ -24,7 +30,11 @@ struct PersistedState: Codable {
         selectedVoice: String? = nil,
         fontSize: Double? = nil,
         lineSpacing: Double? = nil,
-        isTTSEnabled: Bool = true
+        isTTSEnabled: Bool = true,
+        selectedTTSEngine: String? = nil,
+        selectedNativeVoice: String? = nil,
+        selectedKokoroVoice: String? = nil,
+        selectedPiperVoice: String? = nil
     ) {
         self.lastPDFPath = lastPDFPath
         self.lastPDFBookmark = lastPDFBookmark
@@ -35,8 +45,11 @@ struct PersistedState: Codable {
         self.fontSize = fontSize
         self.lineSpacing = lineSpacing
         self.isTTSEnabled = isTTSEnabled
+        self.selectedTTSEngine = selectedTTSEngine
+        self.selectedNativeVoice = selectedNativeVoice
+        self.selectedKokoroVoice = selectedKokoroVoice
+        self.selectedPiperVoice = selectedPiperVoice
     }
     
     static let `default` = PersistedState()
 }
-

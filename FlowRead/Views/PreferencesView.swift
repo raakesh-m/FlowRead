@@ -62,12 +62,16 @@ struct PreferencesView: View {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 0 }
                 }
                 
-                TabButton(title: "API Keys", icon: "key.fill", isSelected: selectedTab == 1) {
+                TabButton(title: "TTS", icon: "waveform", isSelected: selectedTab == 1) {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 1 }
                 }
                 
-                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 2) {
+                TabButton(title: "API Keys", icon: "key.fill", isSelected: selectedTab == 2) {
                     withAnimation(.spring(response: 0.3)) { selectedTab = 2 }
+                }
+                
+                TabButton(title: "Reading", icon: "text.alignleft", isSelected: selectedTab == 3) {
+                    withAnimation(.spring(response: 0.3)) { selectedTab = 3 }
                 }
             }
             .padding(.horizontal, 24)
@@ -80,8 +84,10 @@ struct PreferencesView: View {
                     case 0:
                         GeneralPreferences()
                     case 1:
-                        APIKeyPreferences()
+                        TTSEnginePreferences()
                     case 2:
+                        APIKeyPreferences()
+                    case 3:
                         ReadingPreferences()
                     default:
                         EmptyView()
@@ -92,7 +98,7 @@ struct PreferencesView: View {
             
             Spacer()
         }
-        .frame(width: 560, height: 520)
+        .frame(width: 600, height: 620)
         .background(
             LinearGradient(
                 colors: [

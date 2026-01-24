@@ -21,10 +21,25 @@ class AudioPlaybackManager: NSObject, ObservableObject {
         super.init()
     }
     
-    /// Play audio from Data
+    /// Play audio from Data (supports WAV, AIFF, MP3, etc.)
     func play(audioData: Data) async {
         do {
             currentChunkCompleted = false
+            
+            // Log audio data info for debugging
+            print("[AudioPlayback] Received \(audioData.count) bytes of audio data")
+            
+            // Check if this looks like valid audio
+            guard audioData.count > 44 else {
+                print("[AudioPlayback] Audio data too small (\(audioData.count) bytes)")
+                currentChunkCompleted = true
+                return
+            }
+            
+            // Try to identify audio format from header
+            let header = audioData.prefix(4)
+            let headerString = String(data: header, encoding: .ascii) ?? "unknown"
+            print("[AudioPlayback] Audio format header: \(headerString)")
             
             // Create player from data
             audioPlayer = try AVAudioPlayer(data: audioData)
@@ -34,13 +49,14 @@ class AudioPlaybackManager: NSObject, ObservableObject {
             audioPlayer?.prepareToPlay()
             
             duration = audioPlayer?.duration ?? 0
+            print("[AudioPlayback] Audio duration: \(duration)s, playing at rate: \(playbackRate)")
             
             audioPlayer?.play()
             isPlaying = true
             
             startProgressTimer()
         } catch {
-            print("Failed to play audio: \(error)")
+            print("[AudioPlayback] Failed to play audio: \(error.localizedDescription)")
             currentChunkCompleted = true
         }
     }

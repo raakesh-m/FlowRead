@@ -7,46 +7,56 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		001 /* FlowReadApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101; };
-		002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102; };
-		003 /* TextChunk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103; };
-		004 /* PersistedState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104; };
-		005 /* GroqTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105; };
-		006 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106; };
-		007 /* PDFTextProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107; };
-		008 /* PersistenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108; };
-		009 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109; };
-		010 /* MainReadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110; };
-		011 /* ReadingPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111; };
-		012 /* PlaybackControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112; };
-		013 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 113; };
-		014 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114; };
-		015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 115; };
+		'001' = {isa = PBXBuildFile; fileRef = 101; };
+		'002' = {isa = PBXBuildFile; fileRef = 102; };
+		'003' = {isa = PBXBuildFile; fileRef = 103; };
+		'004' = {isa = PBXBuildFile; fileRef = 104; };
+		'005' = {isa = PBXBuildFile; fileRef = 105; };
+		'006' = {isa = PBXBuildFile; fileRef = 106; };
+		'007' = {isa = PBXBuildFile; fileRef = 107; };
+		'008' = {isa = PBXBuildFile; fileRef = 108; };
+		'009' = {isa = PBXBuildFile; fileRef = 109; };
+		'010' = {isa = PBXBuildFile; fileRef = 110; };
+		'011' = {isa = PBXBuildFile; fileRef = 111; };
+		'012' = {isa = PBXBuildFile; fileRef = 112; };
+		'013' = {isa = PBXBuildFile; fileRef = 113; };
+		'014' = {isa = PBXBuildFile; fileRef = 114; };
+		'015' = {isa = PBXBuildFile; fileRef = 115; };
+		1E9F4509AFA1007DEA3C41CF /* TTSEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D74F43008B5424B71F636657 /* TTSEngine.swift */; };
+		3A004CACA3432E056EFC37F0 /* NativeTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92D14BB5B9CC75EFAA2DD74D /* NativeTTSService.swift */; };
+		971B4A24B18D907AF215F3A2 /* ModelDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */; };
+		F8DC439F997A710446E10AFC /* TTSPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE0496BB929EAA145A6535A /* TTSPreferencesView.swift */; };
+		FEC241339DCEF75791F86047 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C54D0097EC75A00060E022 /* TTSManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		100 /* FlowRead.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlowRead.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		101 /* FlowReadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowReadApp.swift; sourceTree = "<group>"; };
-		102 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
-		103 /* TextChunk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextChunk.swift; sourceTree = "<group>"; };
-		104 /* PersistedState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedState.swift; sourceTree = "<group>"; };
-		105 /* GroqTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqTTSService.swift; sourceTree = "<group>"; };
-		106 /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
-		107 /* PDFTextProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFTextProcessor.swift; sourceTree = "<group>"; };
-		108 /* PersistenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
-		109 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		110 /* MainReadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainReadingView.swift; sourceTree = "<group>"; };
-		111 /* ReadingPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPane.swift; sourceTree = "<group>"; };
-		112 /* PlaybackControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlBar.swift; sourceTree = "<group>"; };
-		113 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
-		114 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		115 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		116 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		117 /* FlowRead.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlowRead.entitlements; sourceTree = "<group>"; };
+		0EE0496BB929EAA145A6535A /* TTSPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSPreferencesView.swift; path = FlowRead/Views/TTSPreferencesView.swift; sourceTree = SOURCE_ROOT; };
+		'100' = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FlowRead.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		'101' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowReadApp.swift; sourceTree = "<group>"; };
+		'102' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		'103' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextChunk.swift; sourceTree = "<group>"; };
+		'104' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedState.swift; sourceTree = "<group>"; };
+		'105' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqTTSService.swift; sourceTree = "<group>"; };
+		'106' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
+		'107' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFTextProcessor.swift; sourceTree = "<group>"; };
+		'108' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistenceManager.swift; sourceTree = "<group>"; };
+		'109' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		'110' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainReadingView.swift; sourceTree = "<group>"; };
+		'111' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingPane.swift; sourceTree = "<group>"; };
+		'112' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackControlBar.swift; sourceTree = "<group>"; };
+		'113' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		'114' = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		'115' = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		'116' = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		'117' = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlowRead.entitlements; sourceTree = "<group>"; };
+		92D14BB5B9CC75EFAA2DD74D /* NativeTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeTTSService.swift; path = FlowRead/Services/NativeTTSService.swift; sourceTree = SOURCE_ROOT; };
+		A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelDownloadManager.swift; path = FlowRead/Services/ModelDownloadManager.swift; sourceTree = SOURCE_ROOT; };
+		D74F43008B5424B71F636657 /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSEngine.swift; path = FlowRead/Models/TTSEngine.swift; sourceTree = SOURCE_ROOT; };
+		F3C54D0097EC75A00060E022 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSManager.swift; path = FlowRead/Services/TTSManager.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		200 /* Frameworks */ = {
+		'200' = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -56,74 +66,79 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		300 = {
+		'300' = {
 			isa = PBXGroup;
 			children = (
-				301 /* FlowRead */,
-				302 /* Products */,
+				301,
+				302,
 			);
 			sourceTree = "<group>";
 		};
-		301 /* FlowRead */ = {
+		'301' = {
 			isa = PBXGroup;
 			children = (
-				101 /* FlowReadApp.swift */,
-				303 /* Models */,
-				304 /* Services */,
-				305 /* Views */,
-				306 /* Theme */,
-				115 /* Assets.xcassets */,
-				116 /* Info.plist */,
-				117 /* FlowRead.entitlements */,
+				101,
+				303,
+				304,
+				305,
+				306,
+				115,
+				116,
+				117,
 			);
 			path = FlowRead;
 			sourceTree = "<group>";
 		};
-		302 /* Products */ = {
+		'302' = {
 			isa = PBXGroup;
 			children = (
-				100 /* FlowRead.app */,
+				100,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		303 /* Models */ = {
+		'303' = {
 			isa = PBXGroup;
 			children = (
-				102 /* AppState.swift */,
-				103 /* TextChunk.swift */,
-				104 /* PersistedState.swift */,
+				102,
+				103,
+				104,
+				D74F43008B5424B71F636657 /* TTSEngine.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
 		};
-		304 /* Services */ = {
+		'304' = {
 			isa = PBXGroup;
 			children = (
-				105 /* GroqTTSService.swift */,
-				106 /* AudioPlaybackManager.swift */,
-				107 /* PDFTextProcessor.swift */,
-				108 /* PersistenceManager.swift */,
+				105,
+				106,
+				107,
+				108,
+				A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */,
+				92D14BB5B9CC75EFAA2DD74D /* NativeTTSService.swift */,
+				F3C54D0097EC75A00060E022 /* TTSManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
 		};
-		305 /* Views */ = {
+		'305' = {
 			isa = PBXGroup;
 			children = (
-				109 /* ContentView.swift */,
-				110 /* MainReadingView.swift */,
-				111 /* ReadingPane.swift */,
-				112 /* PlaybackControlBar.swift */,
-				113 /* PreferencesView.swift */,
+				109,
+				110,
+				111,
+				112,
+				113,
+				0EE0496BB929EAA145A6535A /* TTSPreferencesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
 		};
-		306 /* Theme */ = {
+		'306' = {
 			isa = PBXGroup;
 			children = (
-				114 /* Theme.swift */,
+				114,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -131,13 +146,13 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		400 /* FlowRead */ = {
+		'400' = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 500;
 			buildPhases = (
-				401 /* Sources */,
-				200 /* Frameworks */,
-				402 /* Resources */,
+				401,
+				200,
+				402,
 			);
 			buildRules = (
 			);
@@ -145,13 +160,13 @@
 			);
 			name = FlowRead;
 			productName = FlowRead;
-			productReference = 100 /* FlowRead.app */;
+			productReference = 100;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		600 /* Project object */ = {
+		'600' = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
@@ -172,52 +187,57 @@
 				Base,
 			);
 			mainGroup = 300;
-			productRefGroup = 302 /* Products */;
+			productRefGroup = 302;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				400 /* FlowRead */,
+				400,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		402 /* Resources */ = {
+		'402' = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				015 /* Assets.xcassets in Resources */,
+				015,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		401 /* Sources */ = {
+		'401' = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				001 /* FlowReadApp.swift in Sources */,
-				002 /* AppState.swift in Sources */,
-				003 /* TextChunk.swift in Sources */,
-				004 /* PersistedState.swift in Sources */,
-				005 /* GroqTTSService.swift in Sources */,
-				006 /* AudioPlaybackManager.swift in Sources */,
-				007 /* PDFTextProcessor.swift in Sources */,
-				008 /* PersistenceManager.swift in Sources */,
-				009 /* ContentView.swift in Sources */,
-				010 /* MainReadingView.swift in Sources */,
-				011 /* ReadingPane.swift in Sources */,
-				012 /* PlaybackControlBar.swift in Sources */,
-				013 /* PreferencesView.swift in Sources */,
-				014 /* Theme.swift in Sources */,
+				001,
+				002,
+				003,
+				004,
+				005,
+				006,
+				007,
+				008,
+				009,
+				010,
+				011,
+				012,
+				013,
+				014,
+				1E9F4509AFA1007DEA3C41CF /* TTSEngine.swift in Sources */,
+				971B4A24B18D907AF215F3A2 /* ModelDownloadManager.swift in Sources */,
+				3A004CACA3432E056EFC37F0 /* NativeTTSService.swift in Sources */,
+				FEC241339DCEF75791F86047 /* TTSManager.swift in Sources */,
+				F8DC439F997A710446E10AFC /* TTSPreferencesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		700 /* Debug */ = {
+		'700' = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -279,7 +299,7 @@
 			};
 			name = Debug;
 		};
-		701 /* Release */ = {
+		'701' = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -333,7 +353,7 @@
 			};
 			name = Release;
 		};
-		702 /* Debug */ = {
+		'702' = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -362,7 +382,7 @@
 			};
 			name = Debug;
 		};
-		703 /* Release */ = {
+		'703' = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -394,25 +414,25 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		500 /* Build configuration list for PBXNativeTarget "FlowRead" */ = {
+		'500' = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				702 /* Debug */,
-				703 /* Release */,
+				702,
+				703,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		601 /* Build configuration list for PBXProject "FlowRead" */ = {
+		'601' = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				700 /* Debug */,
-				701 /* Release */,
+				700,
+				701,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 600 /* Project object */;
+	rootObject = 600;
 }
