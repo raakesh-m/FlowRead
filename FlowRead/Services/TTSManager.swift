@@ -11,7 +11,8 @@ class TTSManager: ObservableObject {
     // MARK: - TTS Services
     private let nativeTTS: NativeTTSService
     private let groqTTS: GroqTTSService
-    // Kokoro and Piper will be added in Phase 2
+    private let kokoroTTS: KokoroTTSService
+    private let piperTTS: PiperTTSService
     
     // MARK: - Current Engine
     @Published private(set) var currentEngine: TTSEngine = .macOSNative
@@ -25,9 +26,19 @@ class TTSManager: ObservableObject {
     
     // MARK: - Initialization
     init(groqService: GroqTTSService) {
+        logDebug("TTSManager: Initializing NativeTTSService...")
         self.nativeTTS = NativeTTSService()
+
+        logDebug("TTSManager: Setting GroqTTSService...")
         self.groqTTS = groqService
-        print("[TTSManager] Initialized with macOS Native as default engine")
+
+        logDebug("TTSManager: Initializing KokoroTTSService...")
+        self.kokoroTTS = KokoroTTSService()
+
+        logDebug("TTSManager: Initializing PiperTTSService...")
+        self.piperTTS = PiperTTSService()
+
+        logInfo("TTSManager initialized with macOS Native as default engine")
     }
     
     // MARK: - Engine Selection
@@ -56,12 +67,12 @@ class TTSManager: ObservableObject {
     
     func setKokoroVoice(_ voice: KokoroVoice) {
         self.kokoroVoice = voice
-        // Will be implemented in Phase 2
+        kokoroTTS.setVoice(voice)
     }
-    
+
     func setPiperVoice(_ voice: PiperVoice) {
         self.piperVoice = voice
-        // Will be implemented in Phase 2
+        piperTTS.setVoice(voice)
     }
     
     func getNativeVoice() -> NativeVoice { nativeVoice }
@@ -74,25 +85,28 @@ class TTSManager: ObservableObject {
     /// Synthesize text to audio using the currently selected engine
     func synthesize(text: String) async throws -> Data? {
         lastError = nil
-        
+
+        logInfo("TTSManager: Synthesizing with \(currentEngine.displayName)...")
+        logDebug("TTSManager: Text length: \(text.count) characters")
+
         do {
             switch currentEngine {
             case .macOSNative:
-                print("[TTSManager] Synthesizing with macOS Native...")
+                logInfo("TTSManager: Using macOS Native TTS")
                 return try await synthesizeWithNative(text: text)
             case .groqAPI:
-                print("[TTSManager] Synthesizing with Groq API...")
+                logInfo("TTSManager: Using Groq API TTS")
                 return try await synthesizeWithGroq(text: text)
             case .kokoro:
-                print("[TTSManager] Synthesizing with Kokoro...")
+                logInfo("TTSManager: Using Kokoro TTS")
                 return try await synthesizeWithKokoro(text: text)
             case .piper:
-                print("[TTSManager] Synthesizing with Piper...")
+                logInfo("TTSManager: Using Piper TTS")
                 return try await synthesizeWithPiper(text: text)
             }
         } catch {
             lastError = error.localizedDescription
-            print("[TTSManager] Synthesis error: \(error)")
+            logError("TTSManager: Synthesis error - \(error.localizedDescription)")
             throw error
         }
     }
@@ -135,11 +149,11 @@ class TTSManager: ObservableObject {
         do {
             let audioData = try await nativeTTS.synthesize(text: text)
             if let data = audioData {
-                print("[TTSManager] Native TTS returned \(data.count) bytes")
+                logInfo("TTSManager: Native TTS returned \(data.count) bytes")
             }
             return audioData
         } catch {
-            print("[TTSManager] Native TTS failed: \(error)")
+            logError("TTSManager: Native TTS failed - \(error.localizedDescription)")
             throw error
         }
     }
@@ -149,19 +163,35 @@ class TTSManager: ObservableObject {
     }
     
     private func synthesizeWithKokoro(text: String) async throws -> Data? {
-        // Phase 2: ONNX-based Kokoro implementation
-        // For now, fall back to native TTS with a warning
-        print("[TTSManager] Kokoro TTS not yet implemented, falling back to macOS Native")
-        lastError = "Kokoro engine not yet implemented - using macOS Native"
-        return try await synthesizeWithNative(text: text)
+        logInfo("TTSManager: Attempting Kokoro synthesis...")
+        do {
+            let audioData = try await kokoroTTS.synthesize(text: text)
+            if let data = audioData {
+                logInfo("TTSManager: ✓ Kokoro TTS returned \(data.count) bytes")
+            }
+            return audioData
+        } catch {
+            logWarning("TTSManager: ⚠️ Kokoro TTS failed - \(error.localizedDescription)")
+            logInfo("TTSManager: Falling back to macOS Native TTS")
+            lastError = "Kokoro failed: \(error.localizedDescription) - Using macOS Native instead"
+            return try await synthesizeWithNative(text: text)
+        }
     }
     
     private func synthesizeWithPiper(text: String) async throws -> Data? {
-        // Phase 2: ONNX-based Piper implementation
-        // For now, fall back to native TTS with a warning
-        print("[TTSManager] Piper TTS not yet implemented, falling back to macOS Native")
-        lastError = "Piper engine not yet implemented - using macOS Native"
-        return try await synthesizeWithNative(text: text)
+        logInfo("TTSManager: Attempting Piper synthesis...")
+        do {
+            let audioData = try await piperTTS.synthesize(text: text)
+            if let data = audioData {
+                logInfo("TTSManager: ✓ Piper TTS returned \(data.count) bytes")
+            }
+            return audioData
+        } catch {
+            logWarning("TTSManager: ⚠️ Piper TTS failed - \(error.localizedDescription)")
+            logInfo("TTSManager: Falling back to macOS Native TTS")
+            lastError = "Piper failed: \(error.localizedDescription) - Using macOS Native instead"
+            return try await synthesizeWithNative(text: text)
+        }
     }
     
     // MARK: - Engine Information

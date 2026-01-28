@@ -11,14 +11,19 @@ let package = Package(
     products: [
         .executable(name: "FlowRead", targets: ["FlowRead"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.17.0")
+    ],
     targets: [
         .executableTarget(
             name: "FlowRead",
-            dependencies: [],
+            dependencies: [
+                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager")
+            ],
             path: "FlowRead",
             resources: [
-                .process("Assets.xcassets")
+                .process("Assets.xcassets"),
+                .copy("Services/piper_phonemizer.py")
             ]
         )
     ]

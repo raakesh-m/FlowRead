@@ -8,13 +8,13 @@ class PersistenceManager {
     private let userDefaults = UserDefaults.standard
     private let stateKey = "com.flowread.persistedState"
     
-    private var stateFileURL: URL {
+    var stateFileURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let appDirectory = appSupport.appendingPathComponent("FlowRead", isDirectory: true)
-        
+
         // Create directory if needed
         try? FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
-        
+
         return appDirectory.appendingPathComponent("state.json")
     }
     

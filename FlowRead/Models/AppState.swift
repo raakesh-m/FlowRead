@@ -54,15 +54,40 @@ class AppState: ObservableObject {
     static let speedPresets: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
     
     init() {
-        self.audioManager = AudioPlaybackManager()
-        self.ttsService = GroqTTSService()
-        self.ttsManager = TTSManager(groqService: ttsService)
-        self.persistenceManager = PersistenceManager()
-        self.pdfProcessor = PDFTextProcessor()
-        self.modelDownloadManager = ModelDownloadManager()
-        
-        setupBindings()
-        loadPersistedState()
+        logInfo("AppState initialization starting...")
+
+        do {
+            logDebug("Initializing AudioPlaybackManager...")
+            self.audioManager = AudioPlaybackManager()
+
+            logDebug("Initializing GroqTTSService...")
+            self.ttsService = GroqTTSService()
+
+            logDebug("Initializing TTSManager...")
+            self.ttsManager = TTSManager(groqService: ttsService)
+
+            logDebug("Initializing PersistenceManager...")
+            self.persistenceManager = PersistenceManager()
+
+            logDebug("Initializing PDFTextProcessor...")
+            self.pdfProcessor = PDFTextProcessor()
+
+            logDebug("Initializing ModelDownloadManager...")
+            self.modelDownloadManager = ModelDownloadManager()
+
+            logInfo("All services initialized successfully")
+
+            logDebug("Setting up bindings...")
+            setupBindings()
+
+            logDebug("Loading persisted state...")
+            loadPersistedState()
+
+            logInfo("AppState initialization complete")
+        } catch {
+            logCritical("AppState initialization failed: \(error.localizedDescription)")
+            fatalError("Failed to initialize AppState: \(error)")
+        }
     }
     
     private func setupBindings() {

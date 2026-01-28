@@ -65,12 +65,22 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
             
-            if appState.pdfDocument != nil {
-                MainReadingView()
-            } else {
-                WelcomeView(showFilePicker: $showFilePicker)
+            VStack(spacing: 0) {
+                // TTS Error Banner
+                if let error = appState.ttsManager.lastError {
+                    TTSErrorBanner(error: error, onDismiss: {
+                        // Error will auto-clear on next successful synthesis
+                    })
+                }
+
+                // Main content
+                if appState.pdfDocument != nil {
+                    MainReadingView()
+                } else {
+                    WelcomeView(showFilePicker: $showFilePicker)
+                }
             }
-            
+
             if appState.isLoading {
                 LoadingOverlay(message: appState.loadingMessage)
             }

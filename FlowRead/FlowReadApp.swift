@@ -7,7 +7,13 @@ import SwiftUI
 @main
 struct FlowReadApp: App {
     @StateObject private var appState = AppState()
-    
+
+    init() {
+        // Initialize logger and log startup
+        logInfo("FlowRead app initializing...")
+        logInfo("Log file location: \(Logger.shared.getLogPath())")
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
