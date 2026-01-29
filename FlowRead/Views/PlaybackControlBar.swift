@@ -19,64 +19,53 @@ struct PlaybackControlBar: View {
                 // Left: Current chunk info (hide on very compact)
                 if !isCompact {
                     CurrentChunkInfo(isCompact: isMedium)
-                        .frame(maxWidth: isMedium ? 200 : 300, alignment: .leading)
+                        .frame(maxWidth: isMedium ? 180 : 250, alignment: .leading)
                         .layoutPriority(-1)
+                } else {
+                    // Minimal placeholder for spacing
+                    Spacer().frame(width: 8)
                 }
                 
-                if !isCompact {
-                    Spacer(minLength: 8)
-                }
+                Spacer(minLength: 0)
                 
                 // Center: Playback controls (always visible)
                 PlaybackControls(isCompact: isCompact)
                 
-                if !isCompact {
-                    Spacer(minLength: 8)
-                }
+                Spacer(minLength: 0)
                 
-                // Right: TTS, Voice, Speed controls
-                if isCompact {
-                    // Compact: Show only essential controls as icons
-                    HStack(spacing: 4) {
-                        Spacer(minLength: 0)
-                        TTSToggleCompact()
-                        SpeedControlCompact()
-                    }
-                    .layoutPriority(1)
-                } else {
-                    HStack(spacing: isMedium ? 6 : 12) {
-                        TTSToggle(isCompact: isMedium)
-                        if !isMedium {
-                            VoicePicker(isCompact: false)
-                        } else {
-                            VoicePickerCompact()
-                        }
-                        SpeedControl(isCompact: isMedium)
-                    }
-                    .layoutPriority(1)
+                // Right: Controls (Speed, Voice) - TTS removed from here as per request
+                HStack(spacing: isMedium ? 8 : 16) {
+                    SpeedControl(isCompact: isMedium)
+                    
+                    // Unified Voice Picker (auto-detects engine)
+                    UnifiedVoicePicker(isCompact: isMedium)
                 }
+                .layoutPriority(1)
             }
             .padding(.horizontal, isCompact ? 12 : (isMedium ? 16 : 28))
             .padding(.vertical, isCompact ? 16 : 24)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
-        .frame(height: 120)
+        .frame(height: 100) // Reduced height slightly for sleeker look
         .background(
             ZStack {
                 Color(red: 0.10, green: 0.12, blue: 0.17)
                 
-                // Top gradient border
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.2),
-                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1),
-                        Color.clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 1)
-                .frame(maxHeight: .infinity, alignment: .top)
+                // Top border with subtle gradient glow
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3),
+                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.2),
+                            Color.clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(height: 1)
+                    
+                    Spacer()
+                }
             }
         )
     }
@@ -94,46 +83,37 @@ struct CurrentChunkInfo: View {
         return appState.textChunks[index]
     }
     
-    private var truncationLength: Int {
-        isCompact ? 30 : 55
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompact ? 4 : 6) {
+        VStack(alignment: .leading, spacing: 4) {
             if let chunk = currentChunk {
                 HStack(spacing: 6) {
-                    // Animated dot
+                    // Animated dot pulsates when playing
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [
-                                    Color(red: 0.36, green: 0.67, blue: 1.0),
-                                    Color(red: 0.69, green: 0.46, blue: 1.0)
-                                ],
+                                colors: [Color(red: 0.36, green: 0.67, blue: 1.0), Color(red: 0.69, green: 0.46, blue: 1.0)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .frame(width: 6, height: 6)
-                        .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.8), radius: 3)
+                        .scaleEffect(appState.isPlaying ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: appState.isPlaying)
                     
-                    Text(isCompact ? "P\(chunk.pageIndex + 1) • S\(appState.currentChunkIndex + 1)" : "Page \(chunk.pageIndex + 1) • Sentence \(appState.currentChunkIndex + 1)")
-                        .font(.system(size: isCompact ? 10 : 11, weight: .bold))
+                    Text("PAGE \(chunk.pageIndex + 1)")
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
                         .textCase(.uppercase)
-                        .tracking(isCompact ? 0.5 : 1)
-                        .lineLimit(1)
+                        .tracking(1)
                 }
                 
-                if !isCompact {
-                    Text(chunk.text.prefix(truncationLength) + (chunk.text.count > truncationLength ? "..." : ""))
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(Color(white: 0.7))
-                        .lineLimit(1)
-                }
+                Text("#\(appState.currentChunkIndex + 1) • \(chunk.text.prefix(30))...")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(white: 0.6))
+                    .lineLimit(1)
             } else {
-                Text("No content")
-                    .font(.system(size: isCompact ? 11 : 13))
+                Text("Ready to Read")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(white: 0.4))
             }
         }
@@ -147,21 +127,22 @@ struct PlaybackControls: View {
     var isCompact: Bool = false
     
     var body: some View {
-        HStack(spacing: isCompact ? 12 : 28) {
+        HStack(spacing: isCompact ? 16 : 32) {
+            // Prev
             ControlButton(
                 icon: "backward.fill",
-                size: isCompact ? 14 : 18,
-                buttonSize: isCompact ? 36 : 52,
+                size: isCompact ? 16 : 20,
                 action: { appState.previousChunk() },
                 disabled: appState.currentChunkIndex == 0
             )
             
+            // Play/Pause with unique design
             PlayPauseButton(isCompact: isCompact)
             
+            // Next
             ControlButton(
                 icon: "forward.fill",
-                size: isCompact ? 14 : 18,
-                buttonSize: isCompact ? 36 : 52,
+                size: isCompact ? 16 : 20,
                 action: { appState.nextChunk() },
                 disabled: appState.currentChunkIndex >= appState.textChunks.count - 1
             )
@@ -169,77 +150,71 @@ struct PlaybackControls: View {
     }
 }
 
-// MARK: - Play/Pause Button
+// MARK: - Modern Play/Pause Button
 
 struct PlayPauseButton: View {
     @EnvironmentObject var appState: AppState
-    var isCompact: Bool = false
+    var isCompact: Bool
+    
     @State private var isHovered = false
     @State private var isPressed = false
-    
-    private var outerSize: CGFloat { isCompact ? 60 : 100 }
-    private var buttonSize: CGFloat { isCompact ? 44 : 68 }
-    private var iconSize: CGFloat { isCompact ? 18 : 26 }
     
     var body: some View {
         Button(action: { appState.togglePlayback() }) {
             ZStack {
-                // Outer glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(red: 0.36, green: 0.67, blue: 1.0).opacity(isHovered ? 0.4 : 0.2),
-                                Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: isCompact ? 15 : 25,
-                            endRadius: isCompact ? 36 : 60
+                // Glow effect
+                if appState.isPlaying {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4),
+                                    Color.clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 50
+                            )
                         )
-                    )
-                    .frame(width: outerSize, height: outerSize)
+                        .frame(width: 80, height: 80)
+                        .scaleEffect(isHovered ? 1.1 : 1.0)
+                }
                 
-                // Main button with gradient
+                // Button Body
                 Circle()
                     .fill(
                         LinearGradient(
                             colors: [
                                 Color(red: 0.36, green: 0.67, blue: 1.0),
-                                Color(red: 0.55, green: 0.45, blue: 1.0),
-                                Color(red: 0.69, green: 0.46, blue: 1.0)
+                                Color(red: 0.20, green: 0.40, blue: 0.90) // Deeper blue
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: buttonSize, height: buttonSize)
+                    .frame(width: isCompact ? 48 : 64, height: isCompact ? 48 : 64)
+                    .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4), radius: 10, y: 4)
                     .overlay(
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.3), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
+                        Circle().stroke(Color.white.opacity(0.1), lineWidth: 1)
                     )
-                    .shadow(color: Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.5), radius: isCompact ? 8 : 15, y: isCompact ? 3 : 5)
                 
                 // Icon
                 Image(systemName: appState.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: iconSize, weight: .bold))
+                    .font(.system(size: isCompact ? 20 : 28, weight: .bold))
                     .foregroundColor(.white)
-                    .offset(x: appState.isPlaying ? 0 : (isCompact ? 2 : 3))
+                    .offset(x: appState.isPlaying ? 0 : 2) // Visual correction for play icon
             }
         }
         .buttonStyle(.plain)
-        .scaleEffect(isPressed ? 0.92 : (isHovered ? 1.08 : 1.0))
-        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isHovered)
-        .animation(.spring(response: 0.15), value: isPressed)
+        .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
+        .animation(.spring(response: 0.3), value: isHovered)
+        .animation(.spring(response: 0.1), value: isPressed)
         .onHover { isHovered = $0 }
-        .pressEvents(onPress: { isPressed = true }, onRelease: { isPressed = false })
-        .disabled(appState.textChunks.isEmpty)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
     }
 }
 
@@ -248,402 +223,26 @@ struct PlayPauseButton: View {
 struct ControlButton: View {
     let icon: String
     let size: CGFloat
-    var buttonSize: CGFloat = 52
     let action: () -> Void
     var disabled: Bool = false
-    
     @State private var isHovered = false
     
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(
-                        isHovered && !disabled ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.05)
-                    )
-                    .frame(width: buttonSize, height: buttonSize)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                isHovered && !disabled ?
-                                Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.3) :
-                                Color.clear,
-                                lineWidth: 1
-                            )
-                    )
-                
-                Image(systemName: icon)
-                    .font(.system(size: size, weight: .bold))
-                    .foregroundColor(
-                        disabled ? Color(white: 0.3) :
-                        (isHovered ? .white : Color(white: 0.6))
-                    )
-            }
+            Image(systemName: icon)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundColor(disabled ? Color.white.opacity(0.2) : (isHovered ? .white : Color.white.opacity(0.7)))
+                .frame(width: size + 20, height: size + 20)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(isHovered && !disabled ? 0.1 : 0.0))
+                )
         }
         .buttonStyle(.plain)
         .disabled(disabled)
         .onHover { isHovered = $0 }
-        .scaleEffect(isHovered && !disabled ? 1.08 : 1.0)
-        .animation(.spring(response: 0.2), value: isHovered)
-    }
-}
-
-// MARK: - TTS Toggle
-
-struct TTSToggle: View {
-    @EnvironmentObject var appState: AppState
-    var isCompact: Bool = false
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: {
-            appState.isTTSEnabled.toggle()
-            appState.saveState()
-        }) {
-            HStack(spacing: isCompact ? 4 : 8) {
-                Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
-                    .font(.system(size: isCompact ? 11 : 13, weight: .medium))
-                    .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
-                
-                if !isCompact {
-                    Text(appState.isTTSEnabled ? "ON" : "OFF")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(appState.isTTSEnabled ? .white : Color(white: 0.5))
-                }
-            }
-            .padding(.horizontal, isCompact ? 10 : 14)
-            .padding(.vertical, isCompact ? 8 : 10)
-            .background(
-                RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                    .fill(
-                        appState.isTTSEnabled ?
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.2),
-                                Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ) :
-                        LinearGradient(colors: [Color.white.opacity(isHovered ? 0.08 : 0.04)], startPoint: .leading, endPoint: .trailing)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                            .stroke(
-                                appState.isTTSEnabled ?
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.3)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ) :
-                                LinearGradient(colors: [Color.white.opacity(0.1)], startPoint: .leading, endPoint: .trailing),
-                                lineWidth: 1
-                            )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2), value: isHovered)
-    }
-}
-
-// MARK: - TTS Toggle Compact (Icon only for very small screens)
-
-struct TTSToggleCompact: View {
-    @EnvironmentObject var appState: AppState
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: {
-            appState.isTTSEnabled.toggle()
-            appState.saveState()
-        }) {
-            Image(systemName: appState.isTTSEnabled ? "waveform" : "waveform.slash")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(appState.isTTSEnabled ? Color(red: 0.36, green: 0.67, blue: 1.0) : Color(white: 0.5))
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(appState.isTTSEnabled ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) : Color.white.opacity(isHovered ? 0.08 : 0.04))
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help("Text-to-Speech: \(appState.isTTSEnabled ? "On" : "Off")")
-    }
-}
-
-// MARK: - Voice Picker
-
-struct VoicePicker: View {
-    @EnvironmentObject var appState: AppState
-    var isCompact: Bool = false
-    @State private var isHovered = false
-    @State private var showVoiceMenu = false
-    
-    private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
-    }
-    
-    var body: some View {
-        Button(action: { showVoiceMenu.toggle() }) {
-            HStack(spacing: isCompact ? 6 : 10) {
-                Image(systemName: "person.wave.2.fill")
-                    .font(.system(size: isCompact ? 11 : 13, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.36, green: 0.67, blue: 1.0),
-                                Color(red: 0.69, green: 0.46, blue: 1.0)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                
-                if !isCompact {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("VOICE")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(Color(white: 0.5))
-                            .tracking(0.5)
-                        
-                        Text(currentVoice.displayName)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                } else {
-                    Text(currentVoice.displayName)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                }
-                
-                Image(systemName: "chevron.down")
-                    .font(.system(size: isCompact ? 8 : 10, weight: .semibold))
-                    .foregroundColor(Color(white: 0.6))
-                    .rotationEffect(.degrees(showVoiceMenu ? 180 : 0))
-            }
-            .padding(.horizontal, isCompact ? 10 : 14)
-            .padding(.vertical, isCompact ? 6 : 8)
-            .background(
-                RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                    .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.25),
-                                        Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.15)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.spring(response: 0.2), value: isHovered)
-        .animation(.spring(response: 0.2), value: showVoiceMenu)
-        .popover(isPresented: $showVoiceMenu) {
-            VoicePickerPopover()
-        }
-    }
-}
-
-// MARK: - Voice Picker Compact (Icon only with popover)
-
-struct VoicePickerCompact: View {
-    @EnvironmentObject var appState: AppState
-    @State private var isHovered = false
-    @State private var showVoiceMenu = false
-    
-    private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
-    }
-    
-    var body: some View {
-        Button(action: { showVoiceMenu.toggle() }) {
-            Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.36, green: 0.67, blue: 1.0),
-                            Color(red: 0.69, green: 0.46, blue: 1.0)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 36, height: 36)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help("Voice: \(currentVoice.displayName)")
-        .popover(isPresented: $showVoiceMenu) {
-            VoicePickerPopover()
-        }
-    }
-}
-
-// MARK: - Voice Picker Popover
-
-struct VoicePickerPopover: View {
-    @EnvironmentObject var appState: AppState
-    @Environment(\.dismiss) var dismiss
-    
-    private var currentVoice: GroqVoice {
-        GroqVoice(rawValue: appState.selectedVoice) ?? .hannah
-    }
-    
-    // Group voices by gender
-    private var femaleVoices: [GroqVoice] {
-        GroqVoice.allCases.filter { $0.gender == "Female" }
-    }
-    
-    private var maleVoices: [GroqVoice] {
-        GroqVoice.allCases.filter { $0.gender == "Male" }
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Text("SELECT VOICE")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Color(white: 0.5))
-                    .tracking(2)
-                
-                Spacer()
-                
-                Text("\(GroqVoice.allCases.count) available")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(white: 0.4))
-            }
-            .padding(.bottom, 4)
-            
-            // Female voices section
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.7))
-                    Text("FEMALE")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(white: 0.5))
-                        .tracking(1)
-                }
-                .padding(.bottom, 2)
-                
-                ForEach(femaleVoices) { voice in
-                    VoiceOptionRow(voice: voice, isSelected: currentVoice == voice) {
-                        appState.updateVoice(voice)
-                        dismiss()
-                    }
-                }
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.1))
-            
-            // Male voices section
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 0.6, green: 0.8, blue: 1.0))
-                    Text("MALE")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(white: 0.5))
-                        .tracking(1)
-                }
-                .padding(.bottom, 2)
-                
-                ForEach(maleVoices) { voice in
-                    VoiceOptionRow(voice: voice, isSelected: currentVoice == voice) {
-                        appState.updateVoice(voice)
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .frame(width: 240)
-        .background(Color(red: 0.12, green: 0.14, blue: 0.19))
-    }
-}
-
-// MARK: - Voice Option Row
-
-struct VoiceOptionRow: View {
-    let voice: GroqVoice
-    let isSelected: Bool
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                // Voice name and description
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(voice.displayName)
-                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium, design: .rounded))
-                        .foregroundColor(
-                            isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0) : .white
-                        )
-                    
-                    Text(voice.description)
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(Color(white: 0.5))
-                }
-                
-                Spacer()
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.36, green: 0.67, blue: 1.0),
-                                    Color(red: 0.69, green: 0.46, blue: 1.0)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.12) :
-                        (isHovered ? Color.white.opacity(0.05) : Color.clear)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .scaleEffect(isHovered && !disabled ? 1.1 : 1.0)
+        .animation(.spring(response: 0.3), value: isHovered)
     }
 }
 
@@ -651,242 +250,298 @@ struct VoiceOptionRow: View {
 
 struct SpeedControl: View {
     @EnvironmentObject var appState: AppState
-    var isCompact: Bool = false
-    @State private var isExpanded = false
+    var isCompact: Bool
     @State private var isHovered = false
+    @State private var showMenu = false
     
     var body: some View {
-        HStack(spacing: isCompact ? 4 : 8) {
-            // Speed display pill
-            Button(action: { isExpanded.toggle() }) {
-                HStack(spacing: isCompact ? 6 : 10) {
-                    Image(systemName: "gauge.with.needle.fill")
-                        .font(.system(size: isCompact ? 11 : 13, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.36, green: 0.67, blue: 1.0),
-                                    Color(red: 0.69, green: 0.46, blue: 1.0)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    
-                    if !isCompact {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("SPEED")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(Color(white: 0.5))
-                                .tracking(0.5)
-                            
-                            Text("\(appState.playbackSpeed, specifier: "%.1f")×")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                        }
-                    } else {
-                        Text("\(appState.playbackSpeed, specifier: "%.1f")×")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                    
-                    if !isCompact {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(Color(white: 0.6))
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    }
-                }
-                .padding(.horizontal, isCompact ? 10 : 14)
-                .padding(.vertical, isCompact ? 6 : 8)
-                .background(
-                    RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                        .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: isCompact ? 8 : 10)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.25),
-                                            Color(red: 0.69, green: 0.46, blue: 1.0).opacity(0.15)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .onHover { isHovered = $0 }
-            .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(.spring(response: 0.2), value: isHovered)
-            .animation(.spring(response: 0.2), value: isExpanded)
-            .popover(isPresented: $isExpanded) {
-                SpeedPickerPopover()
-            }
-        }
-    }
-}
-
-// MARK: - Speed Control Compact (Minimal for very small screens)
-
-struct SpeedControlCompact: View {
-    @EnvironmentObject var appState: AppState
-    @State private var isExpanded = false
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: { isExpanded.toggle() }) {
-            HStack(spacing: 4) {
-                Image(systemName: "gauge.with.needle.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.36, green: 0.67, blue: 1.0),
-                                Color(red: 0.69, green: 0.46, blue: 1.0)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+        Button(action: { showMenu.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: "gauge.with.needle")
+                    .font(.system(size: 14))
                 
-                Text("\(appState.playbackSpeed, specifier: "%.1f")×")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                if !isCompact {
+                    Text(String(format: "%.1fx", appState.playbackSpeed))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                }
             }
-            .padding(.horizontal, 10)
+            .foregroundColor(showMenu ? .white : (isHovered ? .white : Color(white: 0.7)))
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(isHovered ? 0.10 : 0.06))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(showMenu || isHovered ? 0.1 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help("Playback Speed")
-        .popover(isPresented: $isExpanded) {
+        .popover(isPresented: $showMenu) {
             SpeedPickerPopover()
+        }
+        .help("Playback Speed")
+    }
+}
+
+// MARK: - Unified Voice Picker (Engine Aware)
+
+struct UnifiedVoicePicker: View {
+    @EnvironmentObject var appState: AppState
+    var isCompact: Bool
+    @State private var isHovered = false
+    @State private var showMenu = false
+    
+    // Determine info based on selected engine
+    var currentInfo: (icon: String, name: String, color: Color) {
+        switch appState.selectedTTSEngine {
+        case .macOSNative:
+            return ("laptopcomputer", appState.selectedNativeVoice.displayName, .blue)
+        case .groqAPI:
+            guard let voice = GroqVoice(rawValue: appState.selectedVoice) else { return ("cloud.fill", "Groq", .purple) }
+            return ("cloud.bolt.fill", voice.displayName, Color(red: 0.69, green: 0.46, blue: 1.0))
+        case .piper:
+            return ("waveform.path.ecg", appState.selectedPiperVoice.displayName, .green)
+        }
+    }
+
+    var body: some View {
+        Button(action: { showMenu.toggle() }) {
+            HStack(spacing: 8) {
+                // Engine Icon
+                ZStack {
+                    Circle()
+                        .fill(currentInfo.color.opacity(0.2))
+                        .frame(width: 24, height: 24)
+                    
+                    Image(systemName: currentInfo.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(currentInfo.color)
+                }
+                
+                if !isCompact {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(currentInfo.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Text(appState.selectedTTSEngine.displayName)
+                            .font(.system(size: 9))
+                            .foregroundColor(Color(white: 0.5))
+                    }
+                }
+                
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(Color(white: 0.3))
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(showMenu || isHovered ? 0.08 : 0.04))
+            )
+            .overlay(
+                 RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(currentInfo.color.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .popover(isPresented: $showMenu) {
+            UnifiedVoiceMenu()
+                .environmentObject(appState)
+        }
+        .help("Select Voice & Engine")
+    }
+}
+
+// MARK: - Unified Voice Menu
+
+struct UnifiedVoiceMenu: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Voice Settings")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Color.white.opacity(0.5))
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+            
+            ScrollView {
+                VStack(spacing: 4) {
+                    // Groq Section
+                    ConfigSection(title: "Cloud (Groq)", active: appState.selectedTTSEngine == .groqAPI) {
+                        ForEach(GroqVoice.allCases.prefix(4)) { voice in // Showing top 4 for brevity
+                            SimpleVoiceRow(
+                                name: voice.displayName,
+                                desc: voice.gender,
+                                isSelected: appState.selectedTTSEngine == .groqAPI && appState.selectedVoice == voice.rawValue
+                            ) {
+                                appState.updateTTSEngine(.groqAPI)
+                                appState.updateVoice(voice)
+                                // Don't dismiss to allow exploring
+                            }
+                        }
+                    }
+                    
+                    Divider().background(Color.white.opacity(0.1)).padding(.vertical, 4)
+                    
+                    // Piper Section (only if downloaded)
+                    if appState.ttsManager.isEngineReady() { // Simplified check, ideally check model manager
+                        ConfigSection(title: "Local AI (Piper)", active: appState.selectedTTSEngine == .piper) {
+                            ForEach(PiperVoice.allCases) { voice in
+                                SimpleVoiceRow(
+                                    name: voice.displayName,
+                                    desc: "Fast & Offline",
+                                    isSelected: appState.selectedTTSEngine == .piper && appState.selectedPiperVoice == voice
+                                ) {
+                                    appState.updateTTSEngine(.piper)
+                                    appState.updatePiperVoice(voice)
+                                }
+                            }
+                        }
+                        
+                        Divider().background(Color.white.opacity(0.1)).padding(.vertical, 4)
+                    }
+                    
+                    // Native Section
+                    ConfigSection(title: "macOS System", active: appState.selectedTTSEngine == .macOSNative) {
+                        ForEach(NativeVoice.allCases) { voice in
+                            SimpleVoiceRow(
+                                name: voice.displayName,
+                                desc: "Offline",
+                                isSelected: appState.selectedTTSEngine == .macOSNative && appState.selectedNativeVoice == voice
+                            ) {
+                                appState.updateTTSEngine(.macOSNative)
+                                appState.updateNativeVoice(voice)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 16)
+            }
+            .frame(height: 300)
+            
+            // Footer to full settings
+            Button(action: {
+                dismiss()
+                appState.showPreferences = true
+            }) {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                    Text("More Settings...")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
+                .frame(maxWidth: .infinity)
+                .padding(10)
+                .background(Color.white.opacity(0.05))
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(width: 260)
+        .background(Color(red: 0.12, green: 0.14, blue: 0.19))
+    }
+}
+
+struct ConfigSection<Content: View>: View {
+    let title: String
+    let active: Bool
+    let content: () -> Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(active ? .white : Color.white.opacity(0.6))
+                
+                Spacer()
+                
+                if active {
+                    Circle().fill(Color.green).frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            
+            content()
         }
     }
 }
 
-// MARK: - Mini Button
-
-struct MiniButton: View {
-    let icon: String
+struct SimpleVoiceRow: View {
+    let name: String
+    let desc: String
+    let isSelected: Bool
     let action: () -> Void
-    
     @State private var isHovered = false
     
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(isHovered ? .white : Color(white: 0.5))
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(isHovered ? 0.12 : 0.05))
-                )
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(name).font(.system(size: 12, weight: .medium)).foregroundColor(.white)
+                    Text(desc).font(.system(size: 10)).foregroundColor(.white.opacity(0.5))
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark").font(.system(size: 10)).foregroundColor(.blue)
+                }
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.blue.opacity(0.2) : (isHovered ? Color.white.opacity(0.05) : Color.clear)))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .scaleEffect(isHovered ? 1.1 : 1.0)
-        .animation(.spring(response: 0.2), value: isHovered)
     }
 }
-
 // MARK: - Speed Picker Popover
 
 struct SpeedPickerPopover: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        VStack(spacing: 8) {
-            Text("SPEED")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(white: 0.5))
-                .tracking(2)
-                .padding(.bottom, 8)
-            
+        VStack(spacing: 4) {
             ForEach(AppState.speedPresets, id: \.self) { speed in
                 Button(action: {
-                    withAnimation(.spring(response: 0.2)) {
-                        appState.playbackSpeed = speed
-                        appState.saveState()
-                    }
+                    appState.playbackSpeed = speed
+                    appState.saveState()
+                    dismiss()
                 }) {
                     HStack {
                         Text("\(speed, specifier: "%.1f")×")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundColor(
-                                appState.playbackSpeed == speed ?
-                                Color(red: 0.36, green: 0.67, blue: 1.0) : .white
-                            )
+                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                            .foregroundColor(appState.playbackSpeed == speed ? .white : Color.white.opacity(0.7))
                         
                         Spacer()
                         
                         if appState.playbackSpeed == speed {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 0.36, green: 0.67, blue: 1.0),
-                                            Color(red: 0.69, green: 0.46, blue: 1.0)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(
-                                appState.playbackSpeed == speed ?
-                                Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) :
-                                Color.clear
-                            )
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(appState.playbackSpeed == speed ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) : Color.clear)
                     )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(16)
-        .frame(width: 160)
+        .padding(8)
+        .frame(width: 120)
         .background(Color(red: 0.12, green: 0.14, blue: 0.19))
     }
-}
-
-// MARK: - Press Events
-
-struct PressEventsModifier: ViewModifier {
-    var onPress: () -> Void
-    var onRelease: () -> Void
-    
-    func body(content: Content) -> some View {
-        content.simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in onPress() }
-                .onEnded { _ in onRelease() }
-        )
-    }
-}
-
-extension View {
-    func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
-        modifier(PressEventsModifier(onPress: onPress, onRelease: onRelease))
-    }
-}
-
-#Preview {
-    PlaybackControlBar()
-        .environmentObject(AppState())
-        .frame(width: 900)
 }

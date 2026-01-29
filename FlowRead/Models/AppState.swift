@@ -33,7 +33,6 @@ class AppState: ObservableObject {
     // MARK: - TTS Engine State
     @Published var selectedTTSEngine: TTSEngine = .macOSNative
     @Published var selectedNativeVoice: NativeVoice = .samantha
-    @Published var selectedKokoroVoice: KokoroVoice = .af_bella
     @Published var selectedPiperVoice: PiperVoice = .amy_medium
     
     // MARK: - Services
@@ -70,6 +69,7 @@ class AppState: ObservableObject {
             self.persistenceManager = PersistenceManager()
 
             logDebug("Initializing PDFTextProcessor...")
+            // Initialize with default strategy, will be updated by persisted state
             self.pdfProcessor = PDFTextProcessor()
 
             logDebug("Initializing ModelDownloadManager...")
@@ -137,6 +137,8 @@ class AppState: ObservableObject {
         if let engineID = state.selectedTTSEngine, let engine = TTSEngine(rawValue: engineID) {
             self.selectedTTSEngine = engine
             ttsManager.setEngine(engine)
+            // Ensure processor uses correct strategy for restored engine
+            updatePDFProcessingStrategy(for: engine)
         }
         
         if let nativeVoiceID = state.selectedNativeVoice, let voice = NativeVoice(rawValue: nativeVoiceID) {
@@ -144,11 +146,7 @@ class AppState: ObservableObject {
             ttsManager.setNativeVoice(voice)
         }
         
-        if let kokoroVoiceID = state.selectedKokoroVoice, let voice = KokoroVoice(rawValue: kokoroVoiceID) {
-            self.selectedKokoroVoice = voice
-            ttsManager.setKokoroVoice(voice)
-        }
-        
+
         if let piperVoiceID = state.selectedPiperVoice, let voice = PiperVoice(rawValue: piperVoiceID) {
             self.selectedPiperVoice = voice
             ttsManager.setPiperVoice(voice)
@@ -236,7 +234,6 @@ class AppState: ObservableObject {
             isTTSEnabled: isTTSEnabled,
             selectedTTSEngine: selectedTTSEngine.rawValue,
             selectedNativeVoice: selectedNativeVoice.rawValue,
-            selectedKokoroVoice: selectedKokoroVoice.rawValue,
             selectedPiperVoice: selectedPiperVoice.rawValue
         )
         persistenceManager.saveState(state)
@@ -634,20 +631,87 @@ class AppState: ObservableObject {
         selectedTTSEngine = engine
         audioCache.removeAll()  // Clear cache when switching engines
         ttsManager.setEngine(engine)
+        updatePDFProcessingStrategy(for: engine)
         saveState()
+    }
+    
+    private func updatePDFProcessingStrategy(for engine: TTSEngine) {
+        let newStrategy: PDFTextProcessor.ChunkingStrategy
+        switch engine {
+        case .groqAPI:
+            newStrategy = .apiOptimized
+        case .piper, .macOSNative:
+            newStrategy = .natural
+        }
+        
+        // Only re-process if strategy changed and we have a PDF loaded
+        if pdfProcessor.getStrategy() != newStrategy && !textChunks.isEmpty {
+            logInfo("Switching text processing strategy to \(newStrategy)...")
+            pdfProcessor.setStrategy(newStrategy)
+            
+            // Re-process in background, maintaining approximate position
+            Task {
+                await reprocessPDFText()
+            }
+        } else {
+            // Just update the strategy for future loads
+            pdfProcessor.setStrategy(newStrategy)
+        }
+    }
+    
+    /// Re-process PDF text with new strategy (e.g. when switching engines)
+    private func reprocessPDFText() async {
+        guard let document = pdfDocument else { return }
+        
+        // Save current progress percentage/location
+        let currentProgress: Double
+        if !textChunks.isEmpty {
+            currentProgress = Double(currentChunkIndex) / Double(textChunks.count)
+        } else {
+            currentProgress = 0
+        }
+        
+        // Capture specific text we are currently reading to find it later (more accurate)
+        let currentTextSnippet = textChunks.indices.contains(currentChunkIndex) ? textChunks[currentChunkIndex].text : ""
+        
+        isLoading = true
+        loadingMessage = "Optimizing text for \(selectedTTSEngine.displayName)..."
+        
+        do {
+            let newChunks = try await pdfProcessor.extractTextChunks(from: document)
+            
+            // Update on main thread
+            await MainActor.run {
+                self.textChunks = newChunks
+                
+                // RESTORE POSITION
+                // 1. Try to find the exact same text snippet
+                if !currentTextSnippet.isEmpty,
+                   let exactMatchIndex = newChunks.firstIndex(where: { $0.text.contains(currentTextSnippet) || currentTextSnippet.contains($0.text) }) {
+                    self.currentChunkIndex = exactMatchIndex
+                } else {
+                    // 2. Fallback to percentage
+                    let newIndex = Int(Double(newChunks.count) * currentProgress)
+                    self.currentChunkIndex = min(max(0, newIndex), newChunks.count - 1)
+                }
+                
+                // Clear cache as chunks are invalid now
+                self.audioCache.removeAll()
+                self.isLoading = false
+                self.loadingMessage = ""
+            }
+        } catch {
+            print("Failed to re-process text: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
     }
     
     func updateNativeVoice(_ voice: NativeVoice) {
         selectedNativeVoice = voice
         audioCache.removeAll()  // Clear cache when switching voices
         ttsManager.setNativeVoice(voice)
-        saveState()
-    }
-    
-    func updateKokoroVoice(_ voice: KokoroVoice) {
-        selectedKokoroVoice = voice
-        audioCache.removeAll()
-        ttsManager.setKokoroVoice(voice)
         saveState()
     }
     

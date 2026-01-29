@@ -18,7 +18,7 @@ struct PersistedState: Codable {
     // TTS Engine settings
     var selectedTTSEngine: String?
     var selectedNativeVoice: String?
-    var selectedKokoroVoice: String?
+
     var selectedPiperVoice: String?
     
     init(
@@ -33,7 +33,6 @@ struct PersistedState: Codable {
         isTTSEnabled: Bool = true,
         selectedTTSEngine: String? = nil,
         selectedNativeVoice: String? = nil,
-        selectedKokoroVoice: String? = nil,
         selectedPiperVoice: String? = nil
     ) {
         self.lastPDFPath = lastPDFPath
@@ -47,7 +46,6 @@ struct PersistedState: Codable {
         self.isTTSEnabled = isTTSEnabled
         self.selectedTTSEngine = selectedTTSEngine
         self.selectedNativeVoice = selectedNativeVoice
-        self.selectedKokoroVoice = selectedKokoroVoice
         self.selectedPiperVoice = selectedPiperVoice
     }
     

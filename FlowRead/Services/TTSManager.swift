@@ -11,7 +11,7 @@ class TTSManager: ObservableObject {
     // MARK: - TTS Services
     private let nativeTTS: NativeTTSService
     private let groqTTS: GroqTTSService
-    private let kokoroTTS: KokoroTTSService
+
     private let piperTTS: PiperTTSService
     
     // MARK: - Current Engine
@@ -21,7 +21,7 @@ class TTSManager: ObservableObject {
     // MARK: - Voice Settings
     private var nativeVoice: NativeVoice = .samantha
     private var groqVoice: GroqVoice = .hannah
-    private var kokoroVoice: KokoroVoice = .af_bella
+
     private var piperVoice: PiperVoice = .amy_medium
     
     // MARK: - Initialization
@@ -32,8 +32,7 @@ class TTSManager: ObservableObject {
         logDebug("TTSManager: Setting GroqTTSService...")
         self.groqTTS = groqService
 
-        logDebug("TTSManager: Initializing KokoroTTSService...")
-        self.kokoroTTS = KokoroTTSService()
+
 
         logDebug("TTSManager: Initializing PiperTTSService...")
         self.piperTTS = PiperTTSService()
@@ -65,10 +64,7 @@ class TTSManager: ObservableObject {
         await groqTTS.setVoice(voice)
     }
     
-    func setKokoroVoice(_ voice: KokoroVoice) {
-        self.kokoroVoice = voice
-        kokoroTTS.setVoice(voice)
-    }
+
 
     func setPiperVoice(_ voice: PiperVoice) {
         self.piperVoice = voice
@@ -77,7 +73,7 @@ class TTSManager: ObservableObject {
     
     func getNativeVoice() -> NativeVoice { nativeVoice }
     func getGroqVoice() -> GroqVoice { groqVoice }
-    func getKokoroVoice() -> KokoroVoice { kokoroVoice }
+
     func getPiperVoice() -> PiperVoice { piperVoice }
     
     // MARK: - Synthesize
@@ -97,9 +93,7 @@ class TTSManager: ObservableObject {
             case .groqAPI:
                 logInfo("TTSManager: Using Groq API TTS")
                 return try await synthesizeWithGroq(text: text)
-            case .kokoro:
-                logInfo("TTSManager: Using Kokoro TTS")
-                return try await synthesizeWithKokoro(text: text)
+
             case .piper:
                 logInfo("TTSManager: Using Piper TTS")
                 return try await synthesizeWithPiper(text: text)
@@ -118,9 +112,7 @@ class TTSManager: ObservableObject {
             return true  // Always ready
         case .groqAPI:
             return true  // Keys are checked when synthesizing
-        case .kokoro:
-            // Check if model is downloaded
-            return FileManager.default.fileExists(atPath: ModelDownloadManager.kokoroModelPath.path)
+
         case .piper:
             // Check if at least one voice is downloaded
             let amyExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .amy_medium).path)
@@ -162,21 +154,7 @@ class TTSManager: ObservableObject {
         return try await groqTTS.synthesize(text: text)
     }
     
-    private func synthesizeWithKokoro(text: String) async throws -> Data? {
-        logInfo("TTSManager: Attempting Kokoro synthesis...")
-        do {
-            let audioData = try await kokoroTTS.synthesize(text: text)
-            if let data = audioData {
-                logInfo("TTSManager: ✓ Kokoro TTS returned \(data.count) bytes")
-            }
-            return audioData
-        } catch {
-            logWarning("TTSManager: ⚠️ Kokoro TTS failed - \(error.localizedDescription)")
-            logInfo("TTSManager: Falling back to macOS Native TTS")
-            lastError = "Kokoro failed: \(error.localizedDescription) - Using macOS Native instead"
-            return try await synthesizeWithNative(text: text)
-        }
-    }
+
     
     private func synthesizeWithPiper(text: String) async throws -> Data? {
         logInfo("TTSManager: Attempting Piper synthesis...")
@@ -203,13 +181,6 @@ class TTSManager: ObservableObject {
             return "Ready - Using \(nativeVoice.displayName)"
         case .groqAPI:
             return "Ready - Using \(groqVoice.displayName)"
-        case .kokoro:
-            let ready = FileManager.default.fileExists(atPath: ModelDownloadManager.kokoroModelPath.path)
-            if ready {
-                return "Ready - Using \(kokoroVoice.displayName)"
-            } else {
-                return "Model Download Required"
-            }
         case .piper:
             let amyExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .amy_medium).path)
             let ryanExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .ryan_medium).path)

@@ -33,7 +33,7 @@ enum ModelDownloadStatus: Equatable {
 class ModelDownloadManager: ObservableObject {
     
     // MARK: - Published State
-    @Published var kokoroStatus: ModelDownloadStatus = .notDownloaded
+    // MARK: - Published State
     @Published var piperStatus: ModelDownloadStatus = .notDownloaded
     
     // MARK: - Private Properties
@@ -49,17 +49,7 @@ class ModelDownloadManager: ObservableObject {
         return appSupport.appendingPathComponent("FlowRead/Models", isDirectory: true)
     }()
     
-    nonisolated static let kokoroModelPath: URL = {
-        modelsDirectory.appendingPathComponent("kokoro-v1.0-quantized.onnx")
-    }()
-    
-    nonisolated static let kokoroTokenizerPath: URL = {
-        modelsDirectory.appendingPathComponent("kokoro-tokenizer.json")
-    }()
-    
-    nonisolated static func kokoroVoicePath(for voice: KokoroVoice) -> URL {
-        modelsDirectory.appendingPathComponent("kokoro-voice-\(voice.rawValue).bin")
-    }
+
     
     nonisolated static func piperModelPath(for voice: PiperVoice) -> URL {
         modelsDirectory.appendingPathComponent("\(voice.rawValue).onnx")
@@ -85,22 +75,8 @@ class ModelDownloadManager: ObservableObject {
         print("[ModelDownload] Checking existing models...")
         
         // Reset all states first (unless currently downloading or deleting)
-        if !kokoroStatus.isDownloading && !kokoroStatus.isDeleting {
-            kokoroStatus = .notDownloaded
-        }
         if !piperStatus.isDownloading && !piperStatus.isDeleting {
              piperStatus = .notDownloaded
-         }
-         
-         // Check Kokoro - need model, tokenizer, and at least one voice
-         let kokoroModelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
-         let kokoroTokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
-         let kokoroVoiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: .af_bella).path)
-         
-         print("[ModelDownload] Kokoro: model=\(kokoroModelExists), tokenizer=\(kokoroTokenizerExists), voice=\(kokoroVoiceExists)")
-         
-         if kokoroModelExists && kokoroTokenizerExists && kokoroVoiceExists {
-             kokoroStatus = .downloaded
          }
          
          // Check Piper - need ALL voices for "Pack" status
@@ -119,7 +95,7 @@ class ModelDownloadManager: ObservableObject {
              piperStatus = .downloaded
          }
          
-         print("[ModelDownload] Status check complete - Kokoro: \(kokoroStatus), Piper: \(piperStatus)")
+         print("[ModelDownload] Status check complete - Piper: \(piperStatus)")
     }
     
     // MARK: - Create Directory
@@ -130,87 +106,7 @@ class ModelDownloadManager: ObservableObject {
         }
     }
     
-    // MARK: - Download Kokoro Model
-    func downloadKokoroModel() async {
-        guard !kokoroStatus.isDownloading && !kokoroStatus.isDownloaded else { return }
-        
-        do {
-            try ensureModelsDirectory()
-        } catch {
-            kokoroStatus = .failed(error: "Failed to create directory: \(error.localizedDescription)")
-            return
-        }
-        
-        let totalSize = KokoroModelURLs.modelSize + KokoroModelURLs.tokenizerSize + KokoroModelURLs.voiceSize
-        kokoroStatus = .downloading(progress: 0, bytesDownloaded: 0, totalBytes: totalSize)
-        objectWillChange.send()
-        
-        do {
-            // Download model file (~93 MB - 90% of total)
-            print("[ModelDownload] Starting Kokoro model download...")
-            try await downloadFile(
-                from: KokoroModelURLs.modelURL,
-                to: Self.kokoroModelPath,
-                taskId: "kokoro_model"
-            ) { [weak self] progress, downloaded, _ in
-                DispatchQueue.main.async {
-                    let overallProgress = progress * 0.90
-                    self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: downloaded, totalBytes: totalSize)
-                }
-            }
-            
-            // Download tokenizer (~3 MB - 7% of total)
-            print("[ModelDownload] Starting Kokoro tokenizer download...")
-            try await downloadFile(
-                from: KokoroModelURLs.tokenizerURL,
-                to: Self.kokoroTokenizerPath,
-                taskId: "kokoro_tokenizer"
-            ) { [weak self] progress, downloaded, _ in
-                DispatchQueue.main.async {
-                    let overallProgress = 0.90 + (progress * 0.07)
-                    let overallDownloaded = KokoroModelURLs.modelSize + downloaded
-                    self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: overallDownloaded, totalBytes: totalSize)
-                }
-            }
-            
-            // Download default voice (af_bella - ~1 MB - 3% of total)
-            let defaultVoice = KokoroVoice.af_bella
-            print("[ModelDownload] Starting Kokoro voice (\(defaultVoice.displayName)) download...")
-            try await downloadFile(
-                from: KokoroModelURLs.voiceURL(for: defaultVoice),
-                to: Self.kokoroVoicePath(for: defaultVoice),
-                taskId: "kokoro_voice"
-            ) { [weak self] progress, downloaded, _ in
-                DispatchQueue.main.async {
-                    let overallProgress = 0.97 + (progress * 0.03)
-                    let overallDownloaded = KokoroModelURLs.modelSize + KokoroModelURLs.tokenizerSize + downloaded
-                    self?.kokoroStatus = .downloading(progress: overallProgress, bytesDownloaded: overallDownloaded, totalBytes: totalSize)
-                }
-            }
-            
-            // Small delay to let any pending progress updates complete
-            try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1 seconds
-            
-            // Verify files exist before marking as downloaded
-            let modelExists = fileManager.fileExists(atPath: Self.kokoroModelPath.path)
-            let tokenizerExists = fileManager.fileExists(atPath: Self.kokoroTokenizerPath.path)
-            let voiceExists = fileManager.fileExists(atPath: Self.kokoroVoicePath(for: defaultVoice).path)
-            
-            if modelExists && tokenizerExists && voiceExists {
-                kokoroStatus = .downloaded
-                objectWillChange.send()
-                print("[ModelDownload] Kokoro model downloaded successfully!")
-            } else {
-                kokoroStatus = .failed(error: "Download completed but files not found")
-                print("[ModelDownload] Kokoro download verification failed")
-            }
-            
-        } catch {
-            kokoroStatus = .failed(error: error.localizedDescription)
-            objectWillChange.send()
-            print("[ModelDownload] Kokoro download failed: \(error)")
-        }
-    }
+
     
     // MARK: - Download Piper Model
     // MARK: - Download Piper Pack
@@ -298,12 +194,7 @@ class ModelDownloadManager: ObservableObject {
         progressObservers.removeValue(forKey: taskId)
     }
     
-    func cancelKokoroDownload() {
-        cancelDownload(taskId: "kokoro_model")
-        cancelDownload(taskId: "kokoro_tokenizer")
-        cancelDownload(taskId: "kokoro_voice")
-        kokoroStatus = .notDownloaded
-    }
+
     
     // MARK: - Cancel Piper Pack
     func cancelPiperPackDownload() {
@@ -315,65 +206,7 @@ class ModelDownloadManager: ObservableObject {
         piperStatus = .notDownloaded
     }
 
-    // MARK: - Delete Kokoro Model
-    func deleteKokoroModel() {
-        guard !kokoroStatus.isDeleting else { 
-            print("[ModelDownload] Already deleting Kokoro, ignoring")
-            return 
-        }
-        
-        print("[ModelDownload] Starting Kokoro model deletion...")
-        kokoroStatus = .deleting
-        objectWillChange.send()
-        
-        // Use regular Task to maintain MainActor context
-        Task {
-            // Small delay to allow UI to show deleting state
-            try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3 seconds
-            
-            // Delete files on background thread
-            await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let fm = FileManager.default
-                    
-                    // Delete model file
-                    if fm.fileExists(atPath: Self.kokoroModelPath.path) {
-                        do {
-                            try fm.removeItem(at: Self.kokoroModelPath)
-                            print("[ModelDownload] Deleted: \(Self.kokoroModelPath.lastPathComponent)")
-                        } catch {
-                            print("[ModelDownload] Failed to delete model: \(error)")
-                        }
-                    }
-                    
-                    // Delete tokenizer file
-                    if fm.fileExists(atPath: Self.kokoroTokenizerPath.path) {
-                        do {
-                            try fm.removeItem(at: Self.kokoroTokenizerPath)
-                            print("[ModelDownload] Deleted: \(Self.kokoroTokenizerPath.lastPathComponent)")
-                        } catch {
-                            print("[ModelDownload] Failed to delete tokenizer: \(error)")
-                        }
-                    }
-                    
-                    // Delete all voice files
-                    for voice in KokoroVoice.allCases {
-                        let voicePath = Self.kokoroVoicePath(for: voice)
-                        if fm.fileExists(atPath: voicePath.path) {
-                            try? fm.removeItem(at: voicePath)
-                        }
-                    }
-                    
-                    continuation.resume()
-                }
-            }
-            
-            // Update status on MainActor
-            kokoroStatus = .notDownloaded
-            objectWillChange.send()
-            print("[ModelDownload] Kokoro model deleted successfully")
-        }
-    }
+
 
     // MARK: - Delete Piper Pack
     func deletePiperPack() {

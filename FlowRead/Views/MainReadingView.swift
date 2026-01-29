@@ -100,6 +100,18 @@ struct TopToolbar: View {
                 
                 // Toolbar buttons
                 HStack(spacing: isMedium ? 6 : 10) {
+                    // NEW: TTS Toggle Button (Moved from Control Panel)
+                    ToolbarButton(
+                        icon: appState.isTTSEnabled ? "waveform.circle.fill" : "waveform.circle",
+                        isActive: appState.isTTSEnabled,
+                        tooltip: "Text-to-Speech",
+                        size: isMedium ? 32 : 40,
+                        activeColor: Color.blue // Or custom color if preferred
+                    ) {
+                        appState.isTTSEnabled.toggle()
+                        appState.saveState()
+                    }
+                    
                     ToolbarButton(
                         icon: appState.autoScrollEnabled ? "arrow.down.circle.fill" : "arrow.down.circle",
                         isActive: appState.autoScrollEnabled,
@@ -221,6 +233,7 @@ struct ToolbarButton: View {
     var isActive: Bool = false
     var tooltip: String = ""
     var size: CGFloat = 40
+    var activeColor: Color = Color(red: 0.36, green: 0.67, blue: 1.0)
     let action: () -> Void
     
     @State private var isHovered = false
@@ -238,21 +251,21 @@ struct ToolbarButton: View {
             Image(systemName: icon)
                 .font(.system(size: iconSize, weight: .medium))
                 .foregroundColor(
-                    isActive ? Color(red: 0.36, green: 0.67, blue: 1.0) :
+                    isActive ? activeColor :
                     (isHovered ? .white : Color(white: 0.6))
                 )
                 .frame(width: size, height: size)
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(
-                            isActive ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.15) :
+                            isActive ? activeColor.opacity(0.15) :
                             (isHovered ? Color.white.opacity(0.1) : Color.clear)
                         )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(
-                            isActive ? Color(red: 0.36, green: 0.67, blue: 1.0).opacity(0.4) : Color.clear,
+                            isActive ? activeColor.opacity(0.4) : Color.clear,
                             lineWidth: 1
                         )
                 )

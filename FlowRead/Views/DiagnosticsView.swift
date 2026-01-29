@@ -34,10 +34,7 @@ struct DiagnosticsView: View {
                         DiagnosticRow(label: "Current Engine", value: appState.selectedTTSEngine.displayName)
                         DiagnosticRow(label: "Native TTS", value: "✓ Ready")
                         DiagnosticRow(label: "Groq API", value: "✓ Ready")
-                        DiagnosticRow(
-                            label: "Kokoro TTS",
-                            value: appState.ttsManager.isEngineReady() && appState.selectedTTSEngine == .kokoro ? "✓ Ready" : "⚠ Models Required"
-                        )
+
                         DiagnosticRow(
                             label: "Piper TTS",
                             value: appState.ttsManager.isEngineReady() && appState.selectedTTSEngine == .piper ? "✓ Ready" : "⚠ Models Required"
@@ -45,7 +42,7 @@ struct DiagnosticsView: View {
                     }
 
                     DiagnosticSection(title: "Model Status") {
-                        DiagnosticRow(label: "Kokoro Model", value: modelStatus(for: .kokoro))
+
                         DiagnosticRow(label: "Piper Models", value: modelStatus(for: .piper))
                     }
 
@@ -96,14 +93,7 @@ struct DiagnosticsView: View {
     private func modelStatus(for engine: TTSEngine) -> String {
         let fm = FileManager.default
         switch engine {
-        case .kokoro:
-            let modelExists = fm.fileExists(atPath: ModelDownloadManager.kokoroModelPath.path)
-            let tokenizerExists = fm.fileExists(atPath: ModelDownloadManager.kokoroTokenizerPath.path)
-            if modelExists && tokenizerExists {
-                return "✓ Downloaded"
-            } else {
-                return "✗ Not Downloaded"
-            }
+
         case .piper:
             let amy = fm.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .amy_medium).path)
             let ryan = fm.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .ryan_medium).path)
@@ -128,7 +118,7 @@ struct DiagnosticsView: View {
         App Version: 1.0.0
 
         TTS Engine: \(appState.selectedTTSEngine.displayName)
-        Kokoro Status: \(modelStatus(for: .kokoro))
+
         Piper Status: \(modelStatus(for: .piper))
 
         Log: \(Logger.shared.getLogPath())

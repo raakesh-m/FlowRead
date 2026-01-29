@@ -13,10 +13,30 @@ class PDFTextProcessor {
         case paragraph
     }
     
-    private var chunkMode: ChunkMode = .sentence
+    /// Strategy for how aggressively to split text
+    enum ChunkingStrategy {
+        /// Strict splitting (max 200 chars) for API limits (Groq)
+        case apiOptimized
+        /// Natural splitting (full sentences) for local engines (Native, Piper)
+        case natural
+    }
     
-    init(mode: ChunkMode = .sentence) {
+    private var chunkMode: ChunkMode = .sentence
+    private var strategy: ChunkingStrategy = .natural
+    
+    init(mode: ChunkMode = .sentence, strategy: ChunkingStrategy = .natural) {
         self.chunkMode = mode
+        self.strategy = strategy
+    }
+    
+    /// Set the chunking strategy dynamically
+    func setStrategy(_ strategy: ChunkingStrategy) {
+        self.strategy = strategy
+    }
+    
+    /// Get current strategy
+    func getStrategy() -> ChunkingStrategy {
+        return self.strategy
     }
     
     /// Extract text chunks from PDF document
@@ -204,11 +224,13 @@ class PDFTextProcessor {
             let sentence = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
             
             if !sentence.isEmpty {
-                // Check if sentence is too long for TTS (split if > 200 chars)
-                if sentence.count > 200 {
+                // Check strategy for long sentence handling
+                if strategy == .apiOptimized && sentence.count > 200 {
+                    // Start strict splitting for API limits
                     let subChunks = splitLongSentence(sentence, pageIndex: pageIndex)
                     chunks.append(contentsOf: subChunks)
                 } else {
+                    // Natural strategy (or short sentence): Keep perfectly intact
                     let chunk = TextChunk(
                         text: sentence,
                         pageIndex: pageIndex,
