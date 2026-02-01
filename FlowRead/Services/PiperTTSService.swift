@@ -96,6 +96,57 @@ class PiperTTSService: ObservableObject {
             try loadModel()
         }
 
+        guard isModelReady() else {
+            throw PiperTTSError.modelNotInitialized
+        }
+
+        // IMPORTANT: Piper models are trained with max ~400 phoneme IDs
+        // Long sentences cause the duration predictor to fail, resulting in fast "auctioneer" speech
+        // Conservative limit: 300 characters ≈ 400-450 phoneme IDs (safe margin)
+        let maxChunkLength = 300
+
+        // If text is short enough, synthesize directly
+        if trimmedText.count <= maxChunkLength {
+            return try await synthesizeSingle(text: trimmedText)
+        }
+
+        // Split long text into chunks and synthesize each
+        logInfo("PiperTTS: Text too long (\(trimmedText.count) chars), splitting into chunks...")
+        let chunks = splitTextIntoChunks(trimmedText, maxLength: maxChunkLength)
+
+        guard !chunks.isEmpty else {
+            logWarning("PiperTTS: No valid chunks after splitting")
+            return nil
+        }
+
+        var audioDataPieces: [Data] = []
+
+        logInfo("PiperTTS: Splitting text into \(chunks.count) chunks to preserve quality")
+
+        for (index, chunk) in chunks.enumerated() {
+            logInfo("PiperTTS: Synthesizing chunk \(index + 1)/\(chunks.count) (\(chunk.count) chars)")
+            if let audioData = try await synthesizeSingle(text: chunk) {
+                audioDataPieces.append(audioData)
+            }
+        }
+
+        guard !audioDataPieces.isEmpty else {
+            logWarning("PiperTTS: No audio data generated from chunks")
+            return nil
+        }
+
+        // Combine audio chunks
+        logInfo("PiperTTS: ✓ Combined \(audioDataPieces.count) chunks into final audio")
+        return combineWAVFiles(audioDataPieces)
+    }
+
+    /// Synthesize a single text chunk (internal)
+    private func synthesizeSingle(text: String) async throws -> Data? {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            return nil
+        }
+
         guard let session = ortSession, let cfg = config else {
             throw PiperTTSError.modelNotInitialized
         }
@@ -209,6 +260,141 @@ class PiperTTSService: ObservableObject {
         } catch {
             logInfo("PiperTTS: ✗ Synthesis failed - \(error)")
             throw PiperTTSError.synthesizeFailed(error.localizedDescription)
+        }
+    }
+
+    /// Split text into smaller chunks at natural break points
+    /// Conservative limit to avoid phoneme duration predictor issues
+    private func splitTextIntoChunks(_ text: String, maxLength: Int) -> [String] {
+        var chunks: [String] = []
+        var currentChunk = ""
+
+        // Split by sentences first (natural break points)
+        let sentenceDelimiters = CharacterSet(charactersIn: ".!?")
+        let sentences = text.components(separatedBy: sentenceDelimiters)
+
+        for (index, sentence) in sentences.enumerated() {
+            let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+
+            // Add back the delimiter if not the last sentence
+            let delimiter = index < sentences.count - 1 ? ". " : ""
+            let sentenceWithDelimiter = trimmed + delimiter
+
+            if currentChunk.isEmpty {
+                currentChunk = sentenceWithDelimiter
+            } else if (currentChunk + sentenceWithDelimiter).count <= maxLength {
+                currentChunk += sentenceWithDelimiter
+            } else {
+                // Current chunk is full, save it and start a new one
+                if !currentChunk.isEmpty {
+                    chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                currentChunk = sentenceWithDelimiter
+            }
+
+            // Handle case where a single sentence is too long
+            // Split by punctuation marks (commas, semicolons, etc.)
+            if currentChunk.count > maxLength {
+                let subChunks = splitLongSentence(currentChunk, maxLength: maxLength)
+                chunks.append(contentsOf: subChunks.dropLast()) // Add all but last
+                currentChunk = subChunks.last ?? "" // Keep last as current
+            }
+        }
+
+        // Don't forget the last chunk
+        if !currentChunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+
+        return chunks.filter { !$0.isEmpty }
+    }
+
+    /// Split a long sentence at natural break points (commas, semicolons, conjunctions)
+    private func splitLongSentence(_ sentence: String, maxLength: Int) -> [String] {
+        var chunks: [String] = []
+        var remainingText = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        while !remainingText.isEmpty {
+            // If remaining text is under limit, we're done
+            if remainingText.count <= maxLength {
+                chunks.append(remainingText)
+                break
+            }
+
+            // Find the best break point before maxLength
+            let searchRange = String(remainingText.prefix(maxLength))
+
+            // Try to split at punctuation: comma, semicolon, colon, dash
+            let breakPoints = [", ", "; ", ": ", " - ", " — "]
+            var bestBreakIndex: String.Index? = nil
+
+            for breakPoint in breakPoints {
+                if let lastIndex = searchRange.range(of: breakPoint, options: .backwards)?.upperBound {
+                    bestBreakIndex = lastIndex
+                    break
+                }
+            }
+
+            // If no punctuation, try splitting before conjunctions
+            if bestBreakIndex == nil {
+                let conjunctions = [" and ", " but ", " or ", " because ", " while ", " which "]
+                for conjunction in conjunctions {
+                    if let range = searchRange.range(of: conjunction, options: [.backwards, .caseInsensitive]) {
+                        bestBreakIndex = range.lowerBound
+                        break
+                    }
+                }
+            }
+
+            // If still no break point, split at last space
+            if bestBreakIndex == nil {
+                bestBreakIndex = searchRange.lastIndex(of: " ")
+            }
+
+            if let breakIndex = bestBreakIndex {
+                let offset = searchRange.distance(from: searchRange.startIndex, to: breakIndex)
+                let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: offset)
+                let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if !chunk.isEmpty {
+                    chunks.append(chunk)
+                }
+
+                remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                // No break point found - hard cut (rare edge case)
+                let chunk = String(remainingText.prefix(maxLength))
+                chunks.append(chunk)
+                remainingText = String(remainingText.dropFirst(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return chunks.filter { !$0.isEmpty }
+    }
+
+    /// Combine multiple WAV files into a single WAV file
+    private func combineWAVFiles(_ wavFiles: [Data]) -> Data {
+        guard !wavFiles.isEmpty else { return Data() }
+        guard wavFiles.count > 1 else { return wavFiles[0] }
+
+        // Extract PCM data from each WAV file (skip 44-byte header)
+        var combinedPCM = Data()
+        for wavData in wavFiles {
+            guard wavData.count > 44 else { continue }
+            let pcmData = wavData.dropFirst(44)
+            combinedPCM.append(pcmData)
+        }
+
+        // Get sample rate from config
+        let sampleRate = config?.audio?.sampleRate ?? 22050
+
+        // Create new WAV file with combined PCM data
+        do {
+            return try convertToWAV(rawAudio: combinedPCM, sampleRate: sampleRate)
+        } catch {
+            logError("PiperTTS: Failed to combine WAV files - \(error)")
+            return wavFiles[0] // Fallback to first chunk
         }
     }
 
