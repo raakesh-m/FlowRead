@@ -24,59 +24,115 @@ struct OnlineSettingsView: View {
             // Maybe global toggle should be in General or distinct.
             // For now, let's put the Global TTS toggle in General instead, and here focus on configuration.)
             
-            // 2. Provider Selection (Currently only Groq)
+            // 2. Provider Selection
             PreferenceSection(title: "Provider", icon: "cloud.fill") {
-                HStack {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(colors: [vibrantBlue, vibrantPurple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 32, height: 32)
-                        
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Groq API")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(textWhite)
-                        Text("Ultra-fast cloud inference")
-                            .font(.system(size: 12))
-                            .foregroundColor(textGray)
-                    }
-                    
-                    Spacer()
-                    
-                    if appState.selectedTTSEngine == .groqAPI {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(vibrantBlue)
-                            .font(.system(size: 20))
-                    } else {
-                        Button("Activate") {
-                            appState.updateTTSEngine(.groqAPI)
+                VStack(spacing: 12) {
+                    // Groq API
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [vibrantBlue, vibrantPurple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 32, height: 32)
+                            
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(vibrantBlue.opacity(0.2))
-                        .cornerRadius(6)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(vibrantBlue, lineWidth: 1))
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Groq API")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(textWhite)
+                            Text("Ultra-fast cloud inference (Free tier)")
+                                .font(.system(size: 12))
+                                .foregroundColor(textGray)
+                        }
+                        
+                        Spacer()
+                        
+                        if appState.selectedTTSEngine == .groqAPI {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(vibrantBlue)
+                                .font(.system(size: 20))
+                        } else {
+                            Button("Activate") {
+                                appState.updateTTSEngine(.groqAPI)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(vibrantBlue.opacity(0.2))
+                            .cornerRadius(6)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(vibrantBlue, lineWidth: 1))
+                        }
                     }
+                    .padding(12)
+                    .background(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.1) : Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1))
+                    
+                    // OpenAI TTS
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.8, blue: 0.6), Color(red: 0.2, green: 0.6, blue: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .frame(width: 32, height: 32)
+                            
+                            Image("OpenAILogo")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 18, height: 18)
+                                .foregroundColor(.white)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("OpenAI TTS")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(textWhite)
+                            Text("Premium quality ($15/1M chars)")
+                                .font(.system(size: 12))
+                                .foregroundColor(textGray)
+                        }
+                        
+                        Spacer()
+                        
+                        if appState.selectedTTSEngine == .openAI {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 0.6))
+                                .font(.system(size: 20))
+                        } else {
+                            Button("Activate") {
+                                appState.updateTTSEngine(.openAI)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.2))
+                            .cornerRadius(6)
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(red: 0.4, green: 0.8, blue: 0.6), lineWidth: 1))
+                        }
+                    }
+                    .padding(12)
+                    .background(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.1) : Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.3) : Color.clear, lineWidth: 1))
                 }
-                .padding(12)
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(12)
             }
             
             // 3. API Keys Management
-            APIKeyManagementView()
+            if appState.selectedTTSEngine == .groqAPI {
+                APIKeyManagementView()
+            } else if appState.selectedTTSEngine == .openAI {
+                OpenAIKeyManagementView()
+            }
             
             // 4. Voice Selection
             if appState.selectedTTSEngine == .groqAPI {
                 GroqVoiceSelection()
+            } else if appState.selectedTTSEngine == .openAI {
+                OpenAIVoiceSelection()
             } else {
-                Text("Activate Groq API to configure voices.")
+                Text("Activate an online provider to configure voices.")
                     .font(.system(size: 13))
                     .foregroundColor(Color.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -547,5 +603,227 @@ struct VoiceOptionButton: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0) : Color.white.opacity(isHovered ? 0.1 : 0.05)))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1))
         }.buttonStyle(.plain).onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - OpenAI API Key Management
+
+struct OpenAIKeyManagementView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var apiKey: String = ""
+    @State private var showKey: Bool = false
+    @State private var statusMessage: String = ""
+    @State private var isSuccess: Bool = false
+    
+    let vibrantGreen = Color(red: 0.4, green: 0.8, blue: 0.6)
+    
+    var body: some View {
+        PreferenceSection(title: "OpenAI API Key", icon: "key.fill") {
+            VStack(alignment: .leading, spacing: 12) {
+                // Info text
+                Text("Get your API key from platform.openai.com. Standard: $15/1M chars, HD: $30/1M chars.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color.white.opacity(0.6))
+                    .padding(.bottom, 4)
+                
+                HStack(spacing: 12) {
+                    // Badge
+                    ZStack {
+                        Circle()
+                            .fill(apiKey.isEmpty ? Color.white.opacity(0.05) : vibrantGreen)
+                            .frame(width: 24, height: 24)
+                        
+                        Image(systemName: "key.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(apiKey.isEmpty ? Color(white: 0.5) : .white)
+                    }
+                    
+                    // Input
+                    Group {
+                        if showKey {
+                            TextField("sk-...", text: $apiKey)
+                        } else {
+                            SecureField("sk-...", text: $apiKey)
+                        }
+                    }
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, design: .monospaced))
+                    .padding(10)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(
+                                apiKey.isEmpty ? Color.white.opacity(0.1) : vibrantGreen.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+                }
+                
+                // Action row
+                HStack {
+                    Button(action: { showKey.toggle() }) {
+                        Label(showKey ? "Hide" : "Show", systemImage: showKey ? "eye.slash" : "eye")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    Button(action: saveAPIKey) {
+                        Label("Save Key", systemImage: "checkmark.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(vibrantGreen)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                
+                if !statusMessage.isEmpty {
+                    Text(statusMessage)
+                        .font(.system(size: 11))
+                        .foregroundColor(isSuccess ? .green : .red)
+                }
+            }
+        }
+        .onAppear { loadAPIKey() }
+    }
+    
+    private func loadAPIKey() {
+        let configPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".flowread/api_keys.json")
+        
+        if FileManager.default.fileExists(atPath: configPath.path) {
+            do {
+                let data = try Data(contentsOf: configPath)
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let key = json["openai_api_key"] as? String {
+                    apiKey = key
+                }
+            } catch {
+                print("Failed to load OpenAI key: \(error)")
+            }
+        }
+    }
+    
+    private func saveAPIKey() {
+        let configDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".flowread")
+        let configPath = configDir.appendingPathComponent("api_keys.json")
+        
+        do {
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+            
+            // Load existing config
+            var json: [String: Any] = [:]
+            if FileManager.default.fileExists(atPath: configPath.path) {
+                let data = try Data(contentsOf: configPath)
+                json = (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+            }
+            
+            // Update OpenAI key
+            json["openai_api_key"] = apiKey
+            
+            let data = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+            try data.write(to: configPath)
+            
+            // Reload in TTS Manager
+            Task {
+                await appState.ttsManager.setOpenAIAPIKey(apiKey)
+            }
+            
+            statusMessage = "Key saved successfully!"
+            isSuccess = true
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                statusMessage = ""
+            }
+        } catch {
+            statusMessage = "Failed to save: \(error.localizedDescription)"
+            isSuccess = false
+        }
+    }
+}
+
+// MARK: - OpenAI Voice Selection
+
+struct OpenAIVoiceSelection: View {
+    @EnvironmentObject var appState: AppState
+    @State private var selectedVoice: OpenAIVoice = .nova
+    
+    let vibrantGreen = Color(red: 0.4, green: 0.8, blue: 0.6)
+    
+    var body: some View {
+        PreferenceSection(title: "OpenAI Voice", icon: "speaker.wave.2") {
+            VStack(spacing: 12) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(OpenAIVoice.allCases) { voice in
+                        OpenAIVoiceButton(
+                            voice: voice,
+                            isSelected: selectedVoice == voice,
+                            action: {
+                                selectedVoice = voice
+                                Task {
+                                    await appState.ttsManager.setOpenAIVoice(voice)
+                                }
+                            }
+                        )
+                    }
+                }
+                
+                Text("All voices support multiple languages and work best in English.")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(white: 0.5))
+            }
+        }
+        .onAppear {
+            Task {
+                selectedVoice = await appState.ttsManager.getOpenAIVoice()
+            }
+        }
+    }
+}
+
+struct OpenAIVoiceButton: View {
+    let voice: OpenAIVoice
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+    
+    let vibrantGreen = Color(red: 0.4, green: 0.8, blue: 0.6)
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(voice.displayName)
+                    .font(.system(size: 12, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? .white : Color(white: 0.8))
+                
+                Text(voice.description)
+                    .font(.system(size: 9))
+                    .foregroundColor(isSelected ? Color(white: 0.9) : Color(white: 0.5))
+                    .lineLimit(1)
+                
+                Text(voice.gender)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(isSelected ? Color(white: 0.8) : Color(white: 0.4))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? vibrantGreen : Color.white.opacity(isHovered ? 0.1 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }

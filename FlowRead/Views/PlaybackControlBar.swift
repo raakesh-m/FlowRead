@@ -302,9 +302,16 @@ struct UnifiedVoicePicker: View {
         case .groqAPI:
             guard let voice = GroqVoice(rawValue: appState.selectedVoice) else { return ("cloud.fill", "Groq", .purple) }
             return ("cloud.bolt.fill", voice.displayName, Color(red: 0.69, green: 0.46, blue: 1.0))
+        case .openAI:
+            return ("OpenAILogo", "OpenAI", Color(red: 0.4, green: 0.8, blue: 0.6))  // Custom asset
         case .piper:
             return ("waveform.path.ecg", appState.selectedPiperVoice.displayName, .green)
         }
+    }
+    
+    // Check if we're using a custom image asset
+    var isCustomAsset: Bool {
+        appState.selectedTTSEngine == .openAI
     }
 
     var body: some View {
@@ -316,9 +323,19 @@ struct UnifiedVoicePicker: View {
                         .fill(currentInfo.color.opacity(0.2))
                         .frame(width: 24, height: 24)
                     
-                    Image(systemName: currentInfo.icon)
-                        .font(.system(size: 10))
-                        .foregroundColor(currentInfo.color)
+                    if isCustomAsset {
+                        // Custom image asset (OpenAI logo)
+                        Image(currentInfo.icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(currentInfo.color)
+                    } else {
+                        // SF Symbol
+                        Image(systemName: currentInfo.icon)
+                            .font(.system(size: 10))
+                            .foregroundColor(currentInfo.color)
+                    }
                 }
                 
                 if !isCompact {

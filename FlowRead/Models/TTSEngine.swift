@@ -7,6 +7,7 @@ import Foundation
 enum TTSEngine: String, CaseIterable, Identifiable, Codable {
     case macOSNative = "macos_native"
     case groqAPI = "groq_api"
+    case openAI = "openai"
     case piper = "piper"
     
     var id: String { rawValue }
@@ -17,6 +18,8 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
             return "macOS Native"
         case .groqAPI:
             return "Groq API"
+        case .openAI:
+            return "OpenAI TTS"
         case .piper:
             return "Piper TTS"
         }
@@ -28,6 +31,8 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
             return "Built-in macOS voices, works offline"
         case .groqAPI:
             return "Cloud-based neural voices, requires API key"
+        case .openAI:
+            return "Premium cloud TTS, requires API key ($15/1M chars)"
         case .piper:
             return "Lightweight local AI model, fast"
         }
@@ -39,6 +44,8 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
             return "apple.logo"
         case .groqAPI:
             return "cloud.fill"
+        case .openAI:
+            return "OpenAILogo"  // Custom asset, not SF Symbol
         case .piper:
             return "speaker.wave.3.fill"
         }
@@ -46,7 +53,7 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
     
     var requiresDownload: Bool {
         switch self {
-        case .macOSNative, .groqAPI:
+        case .macOSNative, .groqAPI, .openAI:
             return false
         case .piper:
             return true
@@ -54,13 +61,13 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
     }
     
     var requiresAPIKey: Bool {
-        return self == .groqAPI
+        return self == .groqAPI || self == .openAI
     }
     
     /// Estimated download size in bytes
     var downloadSize: Int64 {
         switch self {
-        case .macOSNative, .groqAPI:
+        case .macOSNative, .groqAPI, .openAI:
             return 0
         case .piper:
             return 126_000_000  // ~126 MB (Amy + Ryan Medium)
@@ -69,7 +76,7 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
     
     var downloadSizeFormatted: String {
         switch self {
-        case .macOSNative, .groqAPI:
+        case .macOSNative, .groqAPI, .openAI:
             return "N/A"
         case .piper:
             return "~126 MB"
@@ -81,6 +88,8 @@ enum TTSEngine: String, CaseIterable, Identifiable, Codable {
         case .macOSNative:
             return 3  // Good
         case .groqAPI:
+            return 5  // Excellent
+        case .openAI:
             return 5  // Excellent
         case .piper:
             return 4  // Very Good

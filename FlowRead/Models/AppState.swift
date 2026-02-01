@@ -434,6 +434,10 @@ class AppState: ObservableObject {
                 isLoading = false
                 loadingMessage = ""
                 handleTTSError(error)
+            } catch let error as OpenAITTSError {
+                isLoading = false
+                loadingMessage = ""
+                handleOpenAITTSError(error)
             } catch let error as NativeTTSError {
                 isLoading = false
                 loadingMessage = ""
@@ -516,6 +520,29 @@ class AppState: ObservableObject {
         case .noAPIKeysConfigured:
             showErrorMessage("No API keys configured. Please add your Groq API keys in preferences.")
             stop()
+        }
+    }
+    
+    private func handleOpenAITTSError(_ error: OpenAITTSError) {
+        switch error {
+        case .noAPIKeyConfigured:
+            showErrorMessage("No OpenAI API key configured. Please add your API key in preferences.")
+            stop()
+        case .rateLimited:
+            showErrorMessage("OpenAI rate limit reached. Please wait a moment...")
+            pause()
+        case .quotaExceeded:
+            showErrorMessage("OpenAI quota exceeded. Please check your billing at platform.openai.com.")
+            stop()
+        case .networkError(let message):
+            showErrorMessage("Network error: \(message)")
+            pause()
+        case .invalidResponse:
+            showErrorMessage("Invalid response from OpenAI. Retrying...")
+            speakCurrentChunk()
+        case .invalidAudioData:
+            showErrorMessage("Invalid audio data received. Retrying...")
+            speakCurrentChunk()
         }
     }
     
@@ -638,7 +665,7 @@ class AppState: ObservableObject {
     private func updatePDFProcessingStrategy(for engine: TTSEngine) {
         let newStrategy: PDFTextProcessor.ChunkingStrategy
         switch engine {
-        case .groqAPI:
+        case .groqAPI, .openAI:
             newStrategy = .apiOptimized
         case .piper, .macOSNative:
             newStrategy = .natural

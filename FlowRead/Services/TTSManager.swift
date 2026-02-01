@@ -11,7 +11,7 @@ class TTSManager: ObservableObject {
     // MARK: - TTS Services
     private let nativeTTS: NativeTTSService
     private let groqTTS: GroqTTSService
-
+    private let openAITTS: OpenAITTSService
     private let piperTTS: PiperTTSService
     
     // MARK: - Current Engine
@@ -21,7 +21,7 @@ class TTSManager: ObservableObject {
     // MARK: - Voice Settings
     private var nativeVoice: NativeVoice = .samantha
     private var groqVoice: GroqVoice = .hannah
-
+    private var openAIVoice: OpenAIVoice = .nova
     private var piperVoice: PiperVoice = .amy_medium
     
     // MARK: - Initialization
@@ -32,7 +32,8 @@ class TTSManager: ObservableObject {
         logDebug("TTSManager: Setting GroqTTSService...")
         self.groqTTS = groqService
 
-
+        logDebug("TTSManager: Initializing OpenAITTSService...")
+        self.openAITTS = OpenAITTSService()
 
         logDebug("TTSManager: Initializing PiperTTSService...")
         self.piperTTS = PiperTTSService()
@@ -64,7 +65,10 @@ class TTSManager: ObservableObject {
         await groqTTS.setVoice(voice)
     }
     
-
+    func setOpenAIVoice(_ voice: OpenAIVoice) async {
+        self.openAIVoice = voice
+        await openAITTS.setVoice(voice)
+    }
 
     func setPiperVoice(_ voice: PiperVoice) {
         self.piperVoice = voice
@@ -73,8 +77,30 @@ class TTSManager: ObservableObject {
     
     func getNativeVoice() -> NativeVoice { nativeVoice }
     func getGroqVoice() -> GroqVoice { groqVoice }
-
+    func getOpenAIVoice() -> OpenAIVoice { openAIVoice }
     func getPiperVoice() -> PiperVoice { piperVoice }
+    
+    // MARK: - OpenAI Specific Methods
+    
+    func setOpenAIAPIKey(_ key: String) async {
+        await openAITTS.setAPIKey(key)
+    }
+    
+    func getOpenAIMaskedAPIKey() async -> String {
+        return await openAITTS.getMaskedAPIKey()
+    }
+    
+    func hasOpenAIAPIKey() async -> Bool {
+        return await openAITTS.hasAPIKey()
+    }
+    
+    func setOpenAIModel(_ model: OpenAITTSModel) async {
+        await openAITTS.setModel(model)
+    }
+    
+    func getOpenAIModel() async -> OpenAITTSModel {
+        return await openAITTS.getModel()
+    }
     
     // MARK: - Synthesize
     
@@ -93,7 +119,9 @@ class TTSManager: ObservableObject {
             case .groqAPI:
                 logInfo("TTSManager: Using Groq API TTS")
                 return try await synthesizeWithGroq(text: text)
-
+            case .openAI:
+                logInfo("TTSManager: Using OpenAI TTS")
+                return try await synthesizeWithOpenAI(text: text)
             case .piper:
                 logInfo("TTSManager: Using Piper TTS")
                 return try await synthesizeWithPiper(text: text)
@@ -112,7 +140,9 @@ class TTSManager: ObservableObject {
             return true  // Always ready
         case .groqAPI:
             return true  // Keys are checked when synthesizing
-
+        case .openAI:
+            // Check synchronously - we can't await here
+            return true  // Keys are checked when synthesizing
         case .piper:
             // Check if at least one voice is downloaded
             let amyExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .amy_medium).path)
@@ -154,7 +184,18 @@ class TTSManager: ObservableObject {
         return try await groqTTS.synthesize(text: text)
     }
     
-
+    private func synthesizeWithOpenAI(text: String) async throws -> Data? {
+        do {
+            let audioData = try await openAITTS.synthesize(text: text)
+            if let data = audioData {
+                logInfo("TTSManager: OpenAI TTS returned \(data.count) bytes")
+            }
+            return audioData
+        } catch {
+            logError("TTSManager: OpenAI TTS failed - \(error.localizedDescription)")
+            throw error
+        }
+    }
     
     private func synthesizeWithPiper(text: String) async throws -> Data? {
         logInfo("TTSManager: Attempting Piper synthesis...")
@@ -181,6 +222,8 @@ class TTSManager: ObservableObject {
             return "Ready - Using \(nativeVoice.displayName)"
         case .groqAPI:
             return "Ready - Using \(groqVoice.displayName)"
+        case .openAI:
+            return "Ready - Using \(openAIVoice.displayName)"
         case .piper:
             let amyExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .amy_medium).path)
             let ryanExists = FileManager.default.fileExists(atPath: ModelDownloadManager.piperModelPath(for: .ryan_medium).path)
@@ -192,10 +235,14 @@ class TTSManager: ObservableObject {
         }
     }
     
-    // MARK: - Reload API Keys (for Groq)
+    // MARK: - Reload API Keys
     
     func reloadGroqKeys() async {
         await groqTTS.reloadKeys()
+    }
+    
+    func reloadOpenAIKey() async {
+        await openAITTS.reloadKey()
     }
 }
 

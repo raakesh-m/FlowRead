@@ -1,53 +1,50 @@
 // PersistedState.swift
-// FlowRead - Persistence model for app state
+// FlowRead - State persistence model
 
 import Foundation
 
-/// State that persists between app sessions
+/// Structure for persisting app state between sessions
 struct PersistedState: Codable {
+    // PDF State
     var lastPDFPath: String?
-    var lastPDFBookmark: Data?  // Security-scoped bookmark for file access
+    var lastPDFBookmark: Data?
     var lastReadingPosition: Int?
+    
+    // Playback Settings
     var playbackSpeed: Double
     var autoScrollEnabled: Bool
-    var selectedVoice: String?
+    
+    // Voice Settings (order matches AppState.saveState() call)
+    var selectedVoice: String?  // Groq voice
+    
+    // Display Settings
     var fontSize: Double?
     var lineSpacing: Double?
-    var isTTSEnabled: Bool
     
-    // TTS Engine settings
+    // TTS Settings
+    var isTTSEnabled: Bool
     var selectedTTSEngine: String?
     var selectedNativeVoice: String?
-
     var selectedPiperVoice: String?
+    var selectedOpenAIVoice: String?  // OpenAI voice
     
-    init(
-        lastPDFPath: String? = nil,
-        lastPDFBookmark: Data? = nil,
-        lastReadingPosition: Int? = nil,
-        playbackSpeed: Double = 1.0,
-        autoScrollEnabled: Bool = true,
-        selectedVoice: String? = nil,
-        fontSize: Double? = nil,
-        lineSpacing: Double? = nil,
-        isTTSEnabled: Bool = true,
-        selectedTTSEngine: String? = nil,
-        selectedNativeVoice: String? = nil,
-        selectedPiperVoice: String? = nil
-    ) {
-        self.lastPDFPath = lastPDFPath
-        self.lastPDFBookmark = lastPDFBookmark
-        self.lastReadingPosition = lastReadingPosition
-        self.playbackSpeed = playbackSpeed
-        self.autoScrollEnabled = autoScrollEnabled
-        self.selectedVoice = selectedVoice
-        self.fontSize = fontSize
-        self.lineSpacing = lineSpacing
-        self.isTTSEnabled = isTTSEnabled
-        self.selectedTTSEngine = selectedTTSEngine
-        self.selectedNativeVoice = selectedNativeVoice
-        self.selectedPiperVoice = selectedPiperVoice
+    // Default state
+    static var `default`: PersistedState {
+        PersistedState(
+            lastPDFPath: nil,
+            lastPDFBookmark: nil,
+            lastReadingPosition: nil,
+            playbackSpeed: 1.0,
+            autoScrollEnabled: true,
+            selectedVoice: nil,
+            fontSize: 17.0,
+            lineSpacing: 10.0,
+            isTTSEnabled: true,
+            selectedTTSEngine: TTSEngine.macOSNative.rawValue,
+            selectedNativeVoice: NativeVoice.samantha.rawValue,
+            selectedPiperVoice: PiperVoice.amy_medium.rawValue,
+            selectedOpenAIVoice: OpenAIVoice.nova.rawValue
+        )
     }
-    
-    static let `default` = PersistedState()
 }
+
