@@ -28,94 +28,101 @@ struct OnlineSettingsView: View {
             PreferenceSection(title: "Provider", icon: "cloud.fill") {
                 VStack(spacing: 12) {
                     // Groq API
-                    HStack {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [vibrantBlue, vibrantPurple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 32, height: 32)
-                            
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Groq API")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(textWhite)
-                            Text("Ultra-fast cloud inference (Free tier)")
-                                .font(.system(size: 12))
-                                .foregroundColor(textGray)
-                        }
-                        
-                        Spacer()
-                        
-                        if appState.selectedTTSEngine == .groqAPI {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(vibrantBlue)
-                                .font(.system(size: 20))
-                        } else {
-                            Button("Activate") {
-                                appState.updateTTSEngine(.groqAPI)
+                    Button(action: {
+                        appState.updateTTSEngine(.groqAPI)
+                    }) {
+                        HStack(spacing: 12) {
+                            // Radio Button
+                            ZStack {
+                                Circle()
+                                    .strokeBorder(appState.selectedTTSEngine == .groqAPI ? vibrantBlue : Color.white.opacity(0.3), lineWidth: 2)
+                                    .frame(width: 20, height: 20)
+
+                                if appState.selectedTTSEngine == .groqAPI {
+                                    Circle()
+                                        .fill(vibrantBlue)
+                                        .frame(width: 12, height: 12)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(vibrantBlue.opacity(0.2))
-                            .cornerRadius(6)
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(vibrantBlue, lineWidth: 1))
+
+                            // Provider Icon
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [vibrantBlue, vibrantPurple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 32, height: 32)
+
+                                Image(systemName: "bolt.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Groq API")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(textWhite)
+                                Text("Ultra-fast cloud inference (Free tier)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(textGray)
+                            }
+
+                            Spacer()
                         }
+                        .padding(12)
+                        .background(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.1) : Color.white.opacity(0.05))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1))
                     }
-                    .padding(12)
-                    .background(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.1) : Color.white.opacity(0.05))
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1))
+                    .buttonStyle(.plain)
                     
                     // OpenAI TTS
-                    HStack {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.8, blue: 0.6), Color(red: 0.2, green: 0.6, blue: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 32, height: 32)
-                            
-                            Image("OpenAILogo")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 18, height: 18)
-                                .foregroundColor(.white)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("OpenAI TTS")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(textWhite)
-                            Text("Premium quality ($15/1M chars)")
-                                .font(.system(size: 12))
-                                .foregroundColor(textGray)
-                        }
-                        
-                        Spacer()
-                        
-                        if appState.selectedTTSEngine == .openAI {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 0.6))
-                                .font(.system(size: 20))
-                        } else {
-                            Button("Activate") {
-                                appState.updateTTSEngine(.openAI)
+                    Button(action: {
+                        appState.updateTTSEngine(.openAI)
+                    }) {
+                        HStack(spacing: 12) {
+                            // Radio Button
+                            ZStack {
+                                Circle()
+                                    .strokeBorder(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6) : Color.white.opacity(0.3), lineWidth: 2)
+                                    .frame(width: 20, height: 20)
+
+                                if appState.selectedTTSEngine == .openAI {
+                                    Circle()
+                                        .fill(Color(red: 0.4, green: 0.8, blue: 0.6))
+                                        .frame(width: 12, height: 12)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.2))
-                            .cornerRadius(6)
-                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(red: 0.4, green: 0.8, blue: 0.6), lineWidth: 1))
+
+                            // Provider Icon
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [Color(red: 0.4, green: 0.8, blue: 0.6), Color(red: 0.2, green: 0.6, blue: 0.5)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .frame(width: 32, height: 32)
+
+                                Image("OpenAILogo")
+                                    .resizable()
+                                    .renderingMode(.template)
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 18, height: 18)
+                                    .foregroundColor(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("OpenAI TTS")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(textWhite)
+                                Text("Premium quality ($15/1M chars)")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(textGray)
+                            }
+
+                            Spacer()
                         }
+                        .padding(12)
+                        .background(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.1) : Color.white.opacity(0.05))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.3) : Color.clear, lineWidth: 1))
                     }
-                    .padding(12)
-                    .background(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.1) : Color.white.opacity(0.05))
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.3) : Color.clear, lineWidth: 1))
+                    .buttonStyle(.plain)
                 }
             }
             
@@ -592,7 +599,7 @@ struct VoiceOptionButton: View {
     let isSelected: Bool
     let action: () -> Void
     @State private var isHovered = false
-    
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {

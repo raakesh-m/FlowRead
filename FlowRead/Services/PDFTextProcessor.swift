@@ -15,10 +15,12 @@ class PDFTextProcessor {
     
     /// Strategy for how aggressively to split text
     enum ChunkingStrategy {
-        /// Strict splitting (max 200 chars) for API limits (Groq)
+        /// Strict splitting (max 200 chars) for API limits (Groq, OpenAI)
         case apiOptimized
-        /// Natural splitting (full sentences) for local engines (Native, Piper)
+        /// Natural splitting (full sentences) for local engines (macOS Native)
         case natural
+        /// Piper-optimized splitting (max 200 chars for sequence limit, split at natural breaks)
+        case piperOptimized
     }
     
     private var chunkMode: ChunkMode = .sentence
@@ -224,13 +226,38 @@ class PDFTextProcessor {
             let sentence = String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
             
             if !sentence.isEmpty {
-                // Check strategy for long sentence handling
-                if strategy == .apiOptimized && sentence.count > 200 {
-                    // Start strict splitting for API limits
-                    let subChunks = splitLongSentence(sentence, pageIndex: pageIndex)
-                    chunks.append(contentsOf: subChunks)
-                } else {
-                    // Natural strategy (or short sentence): Keep perfectly intact
+                switch strategy {
+                case .apiOptimized:
+                    // Strict splitting for API limits (Groq, OpenAI)
+                    if sentence.count > 200 {
+                        let subChunks = splitLongSentence(sentence, pageIndex: pageIndex)
+                        chunks.append(contentsOf: subChunks)
+                    } else {
+                        let chunk = TextChunk(
+                            text: sentence,
+                            pageIndex: pageIndex,
+                            range: NSRange(range, in: text)
+                        )
+                        chunks.append(chunk)
+                    }
+                    
+                case .piperOptimized:
+                    // Piper has a ~400 phoneme ID limit → ~200-250 character limit
+                    // Split at natural breaks (semicolons, commas) to preserve speech quality
+                    if sentence.count > 200 {
+                        let subChunks = splitForPiper(sentence, pageIndex: pageIndex, maxLength: 200)
+                        chunks.append(contentsOf: subChunks)
+                    } else {
+                        let chunk = TextChunk(
+                            text: sentence,
+                            pageIndex: pageIndex,
+                            range: NSRange(range, in: text)
+                        )
+                        chunks.append(chunk)
+                    }
+                    
+                case .natural:
+                    // Natural strategy: Keep sentences perfectly intact
                     let chunk = TextChunk(
                         text: sentence,
                         pageIndex: pageIndex,
@@ -473,6 +500,134 @@ class PDFTextProcessor {
         }
         
         return chunks
+    }
+    
+    /// Split long sentence specifically for Piper TTS
+    /// Piper has a strict phoneme sequence limit (~400 IDs ≈ 200-250 chars)
+    /// This function prioritizes splitting at natural speech breaks (semicolons, commas)
+    /// to maintain prosody and avoid gibberish output
+    private func splitForPiper(_ sentence: String, pageIndex: Int, maxLength: Int = 200) -> [TextChunk] {
+        var chunks: [TextChunk] = []
+        var remainingText = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        while !remainingText.isEmpty {
+            // If remaining text is under limit, we're done
+            if remainingText.count <= maxLength {
+                chunks.append(TextChunk(text: remainingText, pageIndex: pageIndex))
+                break
+            }
+            
+            // Find the best break point BEFORE maxLength
+            let searchRange = String(remainingText.prefix(maxLength))
+            var foundBreak = false
+            
+            // Priority 1: Split at semicolon (strongest clause break in prose)
+            if !foundBreak, let semicolonIndex = searchRange.lastIndex(of: ";") {
+                let breakOffset = searchRange.distance(from: searchRange.startIndex, to: semicolonIndex) + 1
+                if breakOffset >= 50 && breakOffset < remainingText.count {
+                    let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                    let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !chunk.isEmpty {
+                        chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    }
+                    
+                    remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    foundBreak = true
+                }
+            }
+            
+            // Priority 2: Split at comma followed by space
+            if !foundBreak, let commaRange = searchRange.range(of: ", ", options: .backwards) {
+                let breakOffset = searchRange.distance(from: searchRange.startIndex, to: commaRange.lowerBound) + 1 // Include comma
+                if breakOffset >= 50 && breakOffset < remainingText.count {
+                    let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                    let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !chunk.isEmpty {
+                        chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    }
+                    
+                    remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    foundBreak = true
+                }
+            }
+            
+            // Priority 3: Split before conjunctions (and, but, or, which, that, etc.)
+            if !foundBreak {
+                let conjunctions = [" and ", " but ", " or ", " which ", " that ", " where ", " when ", " because ", " although ", " while "]
+                var bestConjunctionBreak: Int? = nil
+                
+                for conjunction in conjunctions {
+                    if let range = searchRange.range(of: conjunction, options: [.backwards, .caseInsensitive]) {
+                        let breakOffset = searchRange.distance(from: searchRange.startIndex, to: range.lowerBound)
+                        if breakOffset >= 50 && (bestConjunctionBreak == nil || breakOffset > bestConjunctionBreak!) {
+                            bestConjunctionBreak = breakOffset
+                        }
+                    }
+                }
+                
+                if let breakOffset = bestConjunctionBreak, breakOffset < remainingText.count {
+                    let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                    let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !chunk.isEmpty {
+                        chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    }
+                    
+                    remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    foundBreak = true
+                }
+            }
+            
+            // Priority 4: Split at colon or dash
+            if !foundBreak {
+                let otherBreaks = [": ", " - ", " — "]
+                for breakMark in otherBreaks {
+                    if let range = searchRange.range(of: breakMark, options: .backwards) {
+                        let breakOffset = searchRange.distance(from: searchRange.startIndex, to: range.lowerBound) + breakMark.count
+                        if breakOffset >= 50 && breakOffset < remainingText.count {
+                            let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                            let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            
+                            if !chunk.isEmpty {
+                                chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                            }
+                            
+                            remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            foundBreak = true
+                            break // Exit the for loop
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: Split at last space to avoid cutting mid-word
+            if !foundBreak, let lastSpaceIndex = searchRange.lastIndex(of: " ") {
+                let breakOffset = searchRange.distance(from: searchRange.startIndex, to: lastSpaceIndex)
+                if breakOffset >= 20 && breakOffset < remainingText.count { // Lower threshold for fallback
+                    let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: breakOffset)
+                    let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    if !chunk.isEmpty {
+                        chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                    }
+                    
+                    remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    foundBreak = true
+                }
+            }
+            
+            // Last resort: Hard cut at maxLength (very rare)
+            if !foundBreak {
+                let cutLength = min(maxLength, remainingText.count)
+                let chunk = String(remainingText.prefix(cutLength))
+                chunks.append(TextChunk(text: chunk, pageIndex: pageIndex))
+                remainingText = String(remainingText.dropFirst(cutLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        return chunks.filter { !$0.text.isEmpty }
     }
     
     /// Find the best natural break point in the text for TTS

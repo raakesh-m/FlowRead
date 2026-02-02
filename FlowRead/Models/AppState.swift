@@ -666,8 +666,14 @@ class AppState: ObservableObject {
         let newStrategy: PDFTextProcessor.ChunkingStrategy
         switch engine {
         case .groqAPI, .openAI:
+            // Cloud APIs have character limits
             newStrategy = .apiOptimized
-        case .piper, .macOSNative:
+        case .piper:
+            // Piper has a ~400 phoneme ID sequence limit (~200-250 chars)
+            // Using piperOptimized splits at natural breaks while respecting the limit
+            newStrategy = .piperOptimized
+        case .macOSNative:
+            // macOS Native can handle any length
             newStrategy = .natural
         }
         
