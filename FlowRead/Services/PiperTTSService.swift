@@ -1,588 +1,411 @@
 // PiperTTSService.swift
-// FlowRead - Piper ONNX-based Text-to-Speech Service
+// FlowRead - Lightweight Piper TTS using Python backend
+// No ONNX Runtime in Swift = App goes from 19 MB to ~3 MB!
 
 import Foundation
-import OnnxRuntimeBindings
 import AVFoundation
 
-/// Piper TTS Service using ONNX Runtime
+/// Lightweight Piper TTS Service that uses Python for synthesis
+/// All the heavy lifting (ONNX, neural network) happens in Python
+/// This keeps the Swift app tiny while providing full offline TTS
 @MainActor
 class PiperTTSService: ObservableObject {
-    private var ortSession: ORTSession?
-    private var ortEnv: ORTEnv?
+    
     private var selectedVoice: PiperVoice = .amy_medium
-    private var config: PiperConfig?
-
+    private var pythonPath: String?
+    private var synthesizeScriptPath: String?
+    
     /// Initialize the service
     init() {
-        logDebug("PiperTTSService: Initializing (models will load on first use)...")
-        logInfo("PiperTTS service initialized successfully")
+        logDebug("PiperTTSService: Initializing lightweight Python-based service...")
+        findResources()
+        logInfo("PiperTTS service initialized (Python backend)")
     }
-
-    /// Load the ONNX model for the selected voice
+    
+    /// Find Python and synthesis script
+    private func findResources() {
+        // Find Python
+        pythonPath = findPython()
+        
+        // Find synthesis script
+        synthesizeScriptPath = findSynthesizeScript()
+        
+        if let python = pythonPath {
+            logDebug("PiperTTS: Python at \(python)")
+        }
+        if let script = synthesizeScriptPath {
+            logDebug("PiperTTS: Script at \(script)")
+        }
+    }
+    
+    /// Check if dependencies are ready
+    func isModelReady() -> Bool {
+        return pythonPath != nil && synthesizeScriptPath != nil
+    }
+    
+    /// Load model (no-op for Python backend, model is loaded per-synthesis)
     func loadModel() throws {
-        logInfo("PiperTTS: Loading model for \(selectedVoice.displayName)...")
-
+        guard pythonPath != nil else {
+            throw PiperTTSError.pythonNotFound
+        }
+        guard synthesizeScriptPath != nil else {
+            throw PiperTTSError.phonemizerNotFound
+        }
+        
+        // Check if model file exists
         let modelPath = ModelDownloadManager.piperModelPath(for: selectedVoice)
-        let configPath = ModelDownloadManager.piperConfigPath(for: selectedVoice)
-
-        // Check if model files exist
         guard FileManager.default.fileExists(atPath: modelPath.path) else {
             throw PiperTTSError.modelNotDownloaded
         }
-
-        guard FileManager.default.fileExists(atPath: configPath.path) else {
-            throw PiperTTSError.configNotFound
-        }
-
-        do {
-            // Load config
-            let configData = try Data(contentsOf: configPath)
-            config = try JSONDecoder().decode(PiperConfig.self, from: configData)
-
-            // Initialize ONNX Runtime environment
-            ortEnv = try ORTEnv(loggingLevel: .warning)
-
-            // Create session options
-            let sessionOptions = try ORTSessionOptions()
-            try sessionOptions.setLogSeverityLevel(.warning)
-
-            // Use CPU-only execution for stability
-            logInfo("PiperTTS: Using CPU execution provider for stability")
-
-            // Load the ONNX model
-            ortSession = try ORTSession(
-                env: ortEnv!,
-                modelPath: modelPath.path,
-                sessionOptions: sessionOptions
-            )
-
-            logInfo("PiperTTS: ✓✓✓ Model loaded successfully")
-        } catch {
-            logError("PiperTTS: ✗ Failed to load model - \(error.localizedDescription)")
-            throw PiperTTSError.modelLoadFailed(error.localizedDescription)
-        }
+        
+        logInfo("PiperTTS: Model ready for \(selectedVoice.displayName)")
     }
-
+    
     /// Set the voice for TTS
     func setVoice(_ voice: PiperVoice) {
         self.selectedVoice = voice
-        // Reload model when voice changes
-        ortSession = nil
-        config = nil
         logInfo("PiperTTS: Voice set to: \(voice.displayName)")
     }
-
+    
     /// Get current voice
     func getVoice() -> PiperVoice {
         return selectedVoice
     }
-
-    /// Check if model is ready
-    func isModelReady() -> Bool {
-        return ortSession != nil && config != nil
-    }
-
-    /// Synthesize text to audio data
+    
+    /// Synthesize text to audio data using Python
     func synthesize(text: String) async throws -> Data? {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             logDebug("PiperTTS: Empty text, skipping")
             return nil
         }
-
-        // Load model if not already loaded
-        if !isModelReady() {
-            try loadModel()
+        
+        guard let python = pythonPath else {
+            throw PiperTTSError.pythonNotFound
         }
-
-        guard isModelReady() else {
-            throw PiperTTSError.modelNotInitialized
+        
+        guard let script = synthesizeScriptPath else {
+            throw PiperTTSError.phonemizerNotFound
         }
-
-        // IMPORTANT: Piper models are trained with max ~400 phoneme IDs
-        // Long sentences cause the duration predictor to fail, resulting in fast "auctioneer" speech
-        // Conservative limit: 300 characters ≈ 400-450 phoneme IDs (safe margin)
+        
+        let modelPath = ModelDownloadManager.piperModelPath(for: selectedVoice)
+        guard FileManager.default.fileExists(atPath: modelPath.path) else {
+            throw PiperTTSError.modelNotDownloaded
+        }
+        
+        // For long text, split into chunks
         let maxChunkLength = 300
-
-        // If text is short enough, synthesize directly
+        
         if trimmedText.count <= maxChunkLength {
-            return try await synthesizeSingle(text: trimmedText)
+            return try await synthesizeSingle(text: trimmedText, python: python, script: script, modelPath: modelPath.path)
         }
-
-        // Split long text into chunks and synthesize each
-        logInfo("PiperTTS: Text too long (\(trimmedText.count) chars), splitting into chunks...")
+        
+        // Split and synthesize
+        logInfo("PiperTTS: Text too long (\(trimmedText.count) chars), splitting...")
         let chunks = splitTextIntoChunks(trimmedText, maxLength: maxChunkLength)
-
-        guard !chunks.isEmpty else {
-            logWarning("PiperTTS: No valid chunks after splitting")
-            return nil
-        }
-
+        
         var audioDataPieces: [Data] = []
-
-        logInfo("PiperTTS: Splitting text into \(chunks.count) chunks to preserve quality")
-
+        
         for (index, chunk) in chunks.enumerated() {
-            logInfo("PiperTTS: Synthesizing chunk \(index + 1)/\(chunks.count) (\(chunk.count) chars)")
-            if let audioData = try await synthesizeSingle(text: chunk) {
+            logInfo("PiperTTS: Synthesizing chunk \(index + 1)/\(chunks.count)")
+            if let audioData = try await synthesizeSingle(text: chunk, python: python, script: script, modelPath: modelPath.path) {
                 audioDataPieces.append(audioData)
             }
         }
-
+        
         guard !audioDataPieces.isEmpty else {
-            logWarning("PiperTTS: No audio data generated from chunks")
             return nil
         }
-
-        // Combine audio chunks
-        logInfo("PiperTTS: ✓ Combined \(audioDataPieces.count) chunks into final audio")
+        
         return combineWAVFiles(audioDataPieces)
     }
-
-    /// Synthesize a single text chunk (internal)
-    private func synthesizeSingle(text: String) async throws -> Data? {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty else {
-            return nil
-        }
-
-        guard let session = ortSession, let cfg = config else {
-            throw PiperTTSError.modelNotInitialized
-        }
-
-        logInfo("PiperTTS: Synthesizing: '\(trimmedText.prefix(50))...' with \(selectedVoice.displayName)")
-
-        do {
-            // Convert text to phoneme IDs
-            let phonemeIds = try textToPhonemeIds(text: trimmedText)
-            logInfo("PiperTTS: Converted to \(phonemeIds.count) phoneme IDs")
-
-            // Create input tensor
-            let inputShape: [NSNumber] = [1, NSNumber(value: phonemeIds.count)]
-            let inputData = Data(bytes: phonemeIds, count: phonemeIds.count * MemoryLayout<Int64>.size)
-            let inputTensor = try ORTValue(
-                tensorData: NSMutableData(data: inputData),
-                elementType: .int64,
-                shape: inputShape
-            )
-
-            // Get input/output names
-            let inputNames = try session.inputNames()
-            let outputNames = try session.outputNames()
-
-            logDebug("PiperTTS: Model expects inputs: \(inputNames)")
-            logDebug("PiperTTS: Model outputs: \(outputNames)")
-
-            // Build input dictionary
-            var inputs: [String: ORTValue] = [:]
-
-            // Add main input (phoneme IDs)
-            if let mainInputName = inputNames.first(where: { $0.contains("input") || $0 == "input" }) {
-                inputs[mainInputName] = inputTensor
-                logDebug("PiperTTS: Using '\(mainInputName)' for phoneme IDs")
-            }
-
-            // Add scales if required (noise_scale, length_scale, noise_w)
-            if inputNames.contains(where: { $0.contains("scales") || $0 == "scales" }) {
-                // Use config values or defaults
-                let noiseScale = Float(cfg.inference?.noiseScale ?? 0.667)
-                let lengthScale = Float(cfg.inference?.lengthScale ?? 1.0)
-                let noiseW = Float(cfg.inference?.noiseW ?? 0.8)
-
-                let scalesVector: [Float] = [noiseScale, lengthScale, noiseW]
-                let scalesShape: [NSNumber] = [NSNumber(value: scalesVector.count)]
-                let scalesData = Data(bytes: scalesVector, count: scalesVector.count * MemoryLayout<Float>.size)
-                let scalesTensor = try ORTValue(
-                    tensorData: NSMutableData(data: scalesData),
-                    elementType: .float,
-                    shape: scalesShape
-                )
-
-                if let scalesInputName = inputNames.first(where: { $0.contains("scales") || $0 == "scales" }) {
-                    inputs[scalesInputName] = scalesTensor
-                    logDebug("PiperTTS: Using '\(scalesInputName)' for scales [\(noiseScale), \(lengthScale), \(noiseW)]")
+    
+    /// Synthesize a single chunk using Python
+    private func synthesizeSingle(text: String, python: String, script: String, modelPath: String) async throws -> Data? {
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                // Create temp file for output
+                let tempDir = FileManager.default.temporaryDirectory
+                let outputPath = tempDir.appendingPathComponent("piper_output_\(UUID().uuidString).wav")
+                
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: python)
+                process.arguments = [script, text, modelPath, outputPath.path]
+                
+                // Set up environment
+                var env = ProcessInfo.processInfo.environment
+                env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:" + (env["PATH"] ?? "")
+                // Add user site-packages to Python path
+                if let home = env["HOME"] {
+                    let userSitePackages = "\(home)/Library/Python/3.12/lib/python/site-packages:\(home)/Library/Python/3.11/lib/python/site-packages:\(home)/Library/Python/3.10/lib/python/site-packages"
+                    env["PYTHONPATH"] = userSitePackages + ":" + (env["PYTHONPATH"] ?? "")
+                }
+                process.environment = env
+                
+                let outputPipe = Pipe()
+                let errorPipe = Pipe()
+                process.standardOutput = outputPipe
+                process.standardError = errorPipe
+                
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus == 0 {
+                        // Read the output file
+                        if FileManager.default.fileExists(atPath: outputPath.path) {
+                            let audioData = try Data(contentsOf: outputPath)
+                            try? FileManager.default.removeItem(at: outputPath)
+                            continuation.resume(returning: audioData)
+                        } else {
+                            // Try to parse JSON output for base64 audio
+                            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                            if let json = try? JSONSerialization.jsonObject(with: outputData) as? [String: Any],
+                               let success = json["success"] as? Bool, success,
+                               let audioB64 = json["audio_base64"] as? String,
+                               let audioData = Data(base64Encoded: audioB64) {
+                                continuation.resume(returning: audioData)
+                            } else {
+                                continuation.resume(returning: nil)
+                            }
+                        }
+                    } else {
+                        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                        let errorStr = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                        
+                        Task { @MainActor in
+                            logError("PiperTTS: \(errorStr)")
+                        }
+                        
+                        // Try to parse JSON error
+                        if let json = try? JSONSerialization.jsonObject(with: errorData) as? [String: Any],
+                           let error = json["error"] as? String {
+                            continuation.resume(throwing: PiperTTSError.synthesizeFailed(error))
+                        } else {
+                            continuation.resume(throwing: PiperTTSError.synthesizeFailed(errorStr))
+                        }
+                    }
+                } catch {
+                    continuation.resume(throwing: PiperTTSError.synthesizeFailed(error.localizedDescription))
                 }
             }
-
-            // Add input_lengths if required
-            if inputNames.contains(where: { $0.contains("input_lengths") || $0 == "input_lengths" }) {
-                let lengths: [Int64] = [Int64(phonemeIds.count)]
-                let lengthsShape: [NSNumber] = [1]
-                let lengthsData = Data(bytes: lengths, count: lengths.count * MemoryLayout<Int64>.size)
-                let lengthsTensor = try ORTValue(
-                    tensorData: NSMutableData(data: lengthsData),
-                    elementType: .int64,
-                    shape: lengthsShape
-                )
-
-                if let lengthsInputName = inputNames.first(where: { $0.contains("input_lengths") || $0 == "input_lengths" }) {
-                    inputs[lengthsInputName] = lengthsTensor
-                    logDebug("PiperTTS: Using '\(lengthsInputName)' for input lengths")
-                }
-            }
-
-            guard !inputs.isEmpty else {
-                throw PiperTTSError.synthesizeFailed("Could not match model input names")
-            }
-
-            logInfo("PiperTTS: Running inference with \(inputs.count) inputs...")
-
-            // Run inference
-            let outputs = try session.run(
-                withInputs: inputs,
-                outputNames: Set(outputNames),
-                runOptions: nil
-            )
-
-            guard let outputName = outputNames.first,
-                  let outputTensor = outputs[outputName] else {
-                throw PiperTTSError.synthesizeFailed("Failed to get model output")
-            }
-
-            // Get audio data from output tensor (FLOAT32 format)
-            let tensorShape = try outputTensor.tensorTypeAndShapeInfo().shape
-            logDebug("PiperTTS: Output tensor shape: \(tensorShape)")
-            let tensorData = try outputTensor.tensorData() as Data
-            logInfo("PiperTTS: Model output size: \(tensorData.count) bytes (\(tensorData.count / 4) float32 samples)")
-
-            // Convert float32 audio samples to int16 PCM
-            logDebug("PiperTTS: Converting float32 samples to int16 PCM...")
-            let pcmData = convertFloat32ToInt16PCM(tensorData)
-            logInfo("PiperTTS: ✓ Converted to PCM: \(pcmData.count) bytes")
-
-            // Convert PCM to WAV format
-            let sampleRate = cfg.audio?.sampleRate ?? 22050
-            let wavData = try convertToWAV(rawAudio: pcmData, sampleRate: sampleRate)
-            logInfo("PiperTTS: WAV audio size: \(wavData.count) bytes")
-
-            return wavData
-        } catch {
-            logInfo("PiperTTS: ✗ Synthesis failed - \(error)")
-            throw PiperTTSError.synthesizeFailed(error.localizedDescription)
         }
     }
-
-    /// Split text into smaller chunks at natural break points
-    /// Conservative limit to avoid phoneme duration predictor issues
+    
+    // MARK: - Helper Methods
+    
+    private func findPython() -> String? {
+        let paths = [
+            "/usr/bin/python3",
+            "/usr/local/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+            "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+            "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+        ]
+        
+        for path in paths {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        
+        // Try which
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["python3"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        } catch {}
+        
+        return nil
+    }
+    
+    private func findSynthesizeScript() -> String? {
+        var paths: [String] = []
+        
+        // App bundle
+        if let resourcePath = Bundle.main.resourcePath {
+            paths.append(URL(fileURLWithPath: resourcePath).appendingPathComponent("piper_synthesize.py").path)
+        }
+        
+        // Development location
+        let devPath = #file.replacingOccurrences(of: "PiperTTSService.swift", with: "piper_synthesize.py")
+        paths.append(devPath)
+        
+        // Current directory
+        paths.append("FlowRead/Services/piper_synthesize.py")
+        
+        for path in paths {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Split text into chunks at natural break points
     private func splitTextIntoChunks(_ text: String, maxLength: Int) -> [String] {
         var chunks: [String] = []
         var currentChunk = ""
-
-        // Split by sentences first (natural break points)
-        let sentenceDelimiters = CharacterSet(charactersIn: ".!?")
-        let sentences = text.components(separatedBy: sentenceDelimiters)
-
+        
+        let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?"))
+        
         for (index, sentence) in sentences.enumerated() {
             let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
-
-            // Add back the delimiter if not the last sentence
+            
             let delimiter = index < sentences.count - 1 ? ". " : ""
             let sentenceWithDelimiter = trimmed + delimiter
-
+            
             if currentChunk.isEmpty {
                 currentChunk = sentenceWithDelimiter
             } else if (currentChunk + sentenceWithDelimiter).count <= maxLength {
                 currentChunk += sentenceWithDelimiter
             } else {
-                // Current chunk is full, save it and start a new one
                 if !currentChunk.isEmpty {
                     chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
                 currentChunk = sentenceWithDelimiter
             }
-
-            // Handle case where a single sentence is too long
-            // Split by punctuation marks (commas, semicolons, etc.)
+            
+            // Handle very long sentences
             if currentChunk.count > maxLength {
                 let subChunks = splitLongSentence(currentChunk, maxLength: maxLength)
-                chunks.append(contentsOf: subChunks.dropLast()) // Add all but last
-                currentChunk = subChunks.last ?? "" // Keep last as current
+                chunks.append(contentsOf: subChunks.dropLast())
+                currentChunk = subChunks.last ?? ""
             }
         }
-
-        // Don't forget the last chunk
+        
         if !currentChunk.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             chunks.append(currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-
+        
         return chunks.filter { !$0.isEmpty }
     }
-
-    /// Split a long sentence at natural break points (commas, semicolons, conjunctions)
+    
     private func splitLongSentence(_ sentence: String, maxLength: Int) -> [String] {
         var chunks: [String] = []
-        var remainingText = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        while !remainingText.isEmpty {
-            // If remaining text is under limit, we're done
-            if remainingText.count <= maxLength {
-                chunks.append(remainingText)
+        var remaining = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        while !remaining.isEmpty {
+            if remaining.count <= maxLength {
+                chunks.append(remaining)
                 break
             }
-
-            // Find the best break point before maxLength
-            let searchRange = String(remainingText.prefix(maxLength))
-
-            // Try to split at punctuation: comma, semicolon, colon, dash
-            let breakPoints = [", ", "; ", ": ", " - ", " — "]
-            var bestBreakIndex: String.Index? = nil
-
-            for breakPoint in breakPoints {
-                if let lastIndex = searchRange.range(of: breakPoint, options: .backwards)?.upperBound {
-                    bestBreakIndex = lastIndex
+            
+            let searchRange = String(remaining.prefix(maxLength))
+            var bestBreak: String.Index? = nil
+            
+            // Try punctuation
+            for breakPoint in [", ", "; ", ": ", " - "] {
+                if let range = searchRange.range(of: breakPoint, options: .backwards) {
+                    bestBreak = range.upperBound
                     break
                 }
             }
-
-            // If no punctuation, try splitting before conjunctions
-            if bestBreakIndex == nil {
-                let conjunctions = [" and ", " but ", " or ", " because ", " while ", " which "]
-                for conjunction in conjunctions {
+            
+            // Try conjunctions
+            if bestBreak == nil {
+                for conjunction in [" and ", " but ", " or "] {
                     if let range = searchRange.range(of: conjunction, options: [.backwards, .caseInsensitive]) {
-                        bestBreakIndex = range.lowerBound
+                        bestBreak = range.lowerBound
                         break
                     }
                 }
             }
-
-            // If still no break point, split at last space
-            if bestBreakIndex == nil {
-                bestBreakIndex = searchRange.lastIndex(of: " ")
+            
+            // Fall back to space
+            if bestBreak == nil {
+                bestBreak = searchRange.lastIndex(of: " ")
             }
-
-            if let breakIndex = bestBreakIndex {
+            
+            if let breakIndex = bestBreak {
                 let offset = searchRange.distance(from: searchRange.startIndex, to: breakIndex)
-                let chunkEndIndex = remainingText.index(remainingText.startIndex, offsetBy: offset)
-                let chunk = String(remainingText[..<chunkEndIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-
+                let endIndex = remaining.index(remaining.startIndex, offsetBy: offset)
+                let chunk = String(remaining[..<endIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
                 if !chunk.isEmpty {
                     chunks.append(chunk)
                 }
-
-                remainingText = String(remainingText[chunkEndIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                remaining = String(remaining[endIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
-                // No break point found - hard cut (rare edge case)
-                let chunk = String(remainingText.prefix(maxLength))
-                chunks.append(chunk)
-                remainingText = String(remainingText.dropFirst(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
+                chunks.append(String(remaining.prefix(maxLength)))
+                remaining = String(remaining.dropFirst(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
-
+        
         return chunks.filter { !$0.isEmpty }
     }
-
-    /// Combine multiple WAV files into a single WAV file
+    
+    /// Combine multiple WAV files
     private func combineWAVFiles(_ wavFiles: [Data]) -> Data {
         guard !wavFiles.isEmpty else { return Data() }
         guard wavFiles.count > 1 else { return wavFiles[0] }
-
-        // Extract PCM data from each WAV file (skip 44-byte header)
+        
+        // Extract PCM from each WAV (skip 44-byte header)
         var combinedPCM = Data()
+        var sampleRate: UInt32 = 22050
+        
         for wavData in wavFiles {
             guard wavData.count > 44 else { continue }
-            let pcmData = wavData.dropFirst(44)
-            combinedPCM.append(pcmData)
+            
+            // Try to read sample rate from first file
+            if combinedPCM.isEmpty && wavData.count >= 28 {
+                wavData.withUnsafeBytes { ptr in
+                    if let baseAddress = ptr.baseAddress {
+                        sampleRate = baseAddress.load(fromByteOffset: 24, as: UInt32.self)
+                    }
+                }
+            }
+            
+            combinedPCM.append(wavData.dropFirst(44))
         }
-
-        // Get sample rate from config
-        let sampleRate = config?.audio?.sampleRate ?? 22050
-
-        // Create new WAV file with combined PCM data
-        do {
-            return try convertToWAV(rawAudio: combinedPCM, sampleRate: sampleRate)
-        } catch {
-            logError("PiperTTS: Failed to combine WAV files - \(error)")
-            return wavFiles[0] // Fallback to first chunk
-        }
+        
+        // Create new WAV
+        return createWAV(pcmData: combinedPCM, sampleRate: Int(sampleRate))
     }
-
-    /// Convert text to phoneme IDs using espeak-ng phonemization
-    private func textToPhonemeIds(text: String) throws -> [Int64] {
-        // Try multiple locations for the phonemizer script
-        var searchPaths: [String] = []
-
-        // 1. App bundle Resources folder (production)
-        if let resourcePath = Bundle.main.resourcePath {
-            searchPaths.append(URL(fileURLWithPath: resourcePath).appendingPathComponent("piper_phonemizer.py").path)
-        }
-
-        // 2. Development location (same directory as this file)
-        let devScriptPath = #file.replacingOccurrences(of: "PiperTTSService.swift", with: "piper_phonemizer.py")
-        searchPaths.append(devScriptPath)
-
-        // 3. Try current working directory
-        searchPaths.append("FlowRead/Services/piper_phonemizer.py")
-
-        // Find the first path that exists
-        guard let finalScriptPath = searchPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) else {
-            logError("PiperTTS: Phonemizer script not found. Searched:")
-            for path in searchPaths {
-                logError("  - \(path)")
-            }
-            throw PiperTTSError.phonemizerNotFound
-        }
-
-        logDebug("PiperTTS: Using phonemizer at: \(finalScriptPath)")
-
-        // Determine espeak voice from selected voice
-        let espeakVoice = "en-us" // Both amy and ryan use en-us
-
-        // Run the phonemizer script
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        process.arguments = [finalScriptPath, text, espeakVoice]
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            // Check exit status
-            guard process.terminationStatus == 0 else {
-                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-                logError("PiperTTS: Phonemizer failed - \(errorMessage)")
-                throw PiperTTSError.phonemizationFailed(errorMessage)
-            }
-
-            // Parse JSON output
-            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-
-            guard let jsonResult = try? JSONSerialization.jsonObject(with: outputData) as? [String: Any],
-                  let success = jsonResult["success"] as? Bool,
-                  success,
-                  let phonemeIds = jsonResult["phoneme_ids"] as? [Int] else {
-                throw PiperTTSError.phonemizationFailed("Invalid JSON response from phonemizer")
-            }
-
-            logDebug("PiperTTS: Phonemizer returned \(phonemeIds.count) phoneme IDs")
-
-            return phonemeIds.map { Int64($0) }
-
-        } catch let error as PiperTTSError {
-            throw error
-        } catch {
-            logError("PiperTTS: Failed to run phonemizer - \(error.localizedDescription)")
-            throw PiperTTSError.phonemizationFailed(error.localizedDescription)
-        }
-    }
-
-    /// Convert float32 audio samples to int16 PCM format with dynamic normalization
-    /// Uses Piper's normalization approach: scale to use full int16 dynamic range
-    private func convertFloat32ToInt16PCM(_ float32Data: Data) -> Data {
-        // Read float32 samples from tensor output
-        let floatCount = float32Data.count / MemoryLayout<Float>.size
-        var floatSamples = [Float](repeating: 0, count: floatCount)
-        float32Data.withUnsafeBytes { rawBuffer in
-            if let baseAddress = rawBuffer.baseAddress {
-                floatSamples = Array(UnsafeBufferPointer(
-                    start: baseAddress.assumingMemoryBound(to: Float.self),
-                    count: floatCount
-                ))
-            }
-        }
-
-        // Find maximum absolute value for normalization
-        let maxAbsValue = floatSamples.map { abs($0) }.max() ?? 0.01
-        let normalizationFactor = 32767.0 / max(0.01, maxAbsValue)
-
-        logDebug("PiperTTS: Audio max amplitude: \(maxAbsValue), normalization factor: \(normalizationFactor)")
-
-        // Convert each float32 sample to int16 with dynamic normalization
-        var int16Samples = [Int16](repeating: 0, count: floatCount)
-        for i in 0..<floatCount {
-            // Normalize and scale to int16 range
-            let normalizedSample = floatSamples[i] * Float(normalizationFactor)
-            // Clamp to valid int16 range
-            let clampedSample = max(-32767.0, min(32767.0, normalizedSample))
-            int16Samples[i] = Int16(clampedSample)
-        }
-
-        // Convert int16 array to Data
-        return Data(bytes: int16Samples, count: int16Samples.count * MemoryLayout<Int16>.size)
-    }
-
-    /// Convert raw audio samples to WAV format
-    private func convertToWAV(rawAudio: Data, sampleRate: Int) throws -> Data {
-        let numChannels: Int16 = 1
-        let bitsPerSample: Int16 = 16
-
-        let dataSize = Int32(rawAudio.count)
-        let fileSize = 36 + dataSize
-
-        var wavData = Data()
-
-        // RIFF header
-        wavData.append("RIFF".data(using: .ascii)!)
-        wavData.append(contentsOf: withUnsafeBytes(of: fileSize.littleEndian) { Array($0) })
-        wavData.append("WAVE".data(using: .ascii)!)
-
-        // fmt chunk
-        wavData.append("fmt ".data(using: .ascii)!)
-        wavData.append(contentsOf: withUnsafeBytes(of: Int32(16).littleEndian) { Array($0) })
-        wavData.append(contentsOf: withUnsafeBytes(of: Int16(1).littleEndian) { Array($0) })
-        wavData.append(contentsOf: withUnsafeBytes(of: numChannels.littleEndian) { Array($0) })
-        wavData.append(contentsOf: withUnsafeBytes(of: Int32(sampleRate).littleEndian) { Array($0) })
-
-        let byteRate = Int32(sampleRate) * Int32(numChannels) * Int32(bitsPerSample) / 8
-        wavData.append(contentsOf: withUnsafeBytes(of: byteRate.littleEndian) { Array($0) })
-
+    
+    private func createWAV(pcmData: Data, sampleRate: Int) -> Data {
+        var wav = Data()
+        
+        let numChannels: UInt16 = 1
+        let bitsPerSample: UInt16 = 16
+        let byteRate = UInt32(sampleRate) * UInt32(numChannels) * UInt32(bitsPerSample) / 8
         let blockAlign = numChannels * bitsPerSample / 8
-        wavData.append(contentsOf: withUnsafeBytes(of: blockAlign.littleEndian) { Array($0) })
-        wavData.append(contentsOf: withUnsafeBytes(of: bitsPerSample.littleEndian) { Array($0) })
-
+        let dataSize = UInt32(pcmData.count)
+        let fileSize = 36 + dataSize
+        
+        // RIFF header
+        wav.append("RIFF".data(using: .ascii)!)
+        wav.append(contentsOf: withUnsafeBytes(of: fileSize.littleEndian) { Array($0) })
+        wav.append("WAVE".data(using: .ascii)!)
+        
+        // fmt chunk
+        wav.append("fmt ".data(using: .ascii)!)
+        wav.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: numChannels.littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate).littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: byteRate.littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: blockAlign.littleEndian) { Array($0) })
+        wav.append(contentsOf: withUnsafeBytes(of: bitsPerSample.littleEndian) { Array($0) })
+        
         // data chunk
-        wavData.append("data".data(using: .ascii)!)
-        wavData.append(contentsOf: withUnsafeBytes(of: dataSize.littleEndian) { Array($0) })
-        wavData.append(rawAudio)
-
-        return wavData
-    }
-
-    /// Clean up resources
-    deinit {
-        ortSession = nil
-        ortEnv = nil
-        config = nil
-        logInfo("PiperTTS: Service deinitialized")
-    }
-}
-
-// MARK: - Piper Config Model
-
-struct PiperConfig: Codable {
-    let audio: AudioConfig?
-    let espeak: EspeakConfig?
-    let inference: InferenceConfig?
-
-    struct AudioConfig: Codable {
-        let sampleRate: Int
-
-        enum CodingKeys: String, CodingKey {
-            case sampleRate = "sample_rate"
-        }
-    }
-
-    struct EspeakConfig: Codable {
-        let voice: String?
-    }
-
-    struct InferenceConfig: Codable {
-        let noiseScale: Double?
-        let lengthScale: Double?
-        let noiseW: Double?
-
-        enum CodingKeys: String, CodingKey {
-            case noiseScale = "noise_scale"
-            case lengthScale = "length_scale"
-            case noiseW = "noise_w"
-        }
+        wav.append("data".data(using: .ascii)!)
+        wav.append(contentsOf: withUnsafeBytes(of: dataSize.littleEndian) { Array($0) })
+        wav.append(pcmData)
+        
+        return wav
     }
 }
 
@@ -596,7 +419,8 @@ enum PiperTTSError: Error, LocalizedError {
     case synthesizeFailed(String)
     case phonemizerNotFound
     case phonemizationFailed(String)
-
+    case pythonNotFound
+    
     var errorDescription: String? {
         switch self {
         case .modelNotDownloaded:
@@ -610,9 +434,11 @@ enum PiperTTSError: Error, LocalizedError {
         case .synthesizeFailed(let message):
             return "Piper synthesis failed: \(message)"
         case .phonemizerNotFound:
-            return "Piper phonemizer script not found"
+            return "Piper synthesis script not found"
         case .phonemizationFailed(let message):
-            return "Phonemization failed: \(message)"
+            return "Synthesis failed: \(message)"
+        case .pythonNotFound:
+            return "Python 3 not found"
         }
     }
 }

@@ -1,5 +1,6 @@
 // swift-tools-version: 5.9
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+// FlowRead - Lightweight PDF Reader with TTS
+// No heavy dependencies = Tiny app bundle (2 MB)!
 
 import PackageDescription
 
@@ -12,18 +13,17 @@ let package = Package(
         .executable(name: "FlowRead", targets: ["FlowRead"])
     ],
     dependencies: [
-        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.17.0")
+        // No external dependencies needed!
+        // Heavy TTS work is handled via Python/pip at runtime
     ],
     targets: [
         .executableTarget(
             name: "FlowRead",
-            dependencies: [
-                .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager")
-            ],
+            dependencies: [],
             path: "FlowRead",
             resources: [
                 .process("Assets.xcassets"),
-                .copy("Services/piper_phonemizer.py")
+                .copy("Services/piper_synthesize.py")
             ]
         )
     ]

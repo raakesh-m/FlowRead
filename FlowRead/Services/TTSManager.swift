@@ -18,6 +18,10 @@ class TTSManager: ObservableObject {
     @Published private(set) var currentEngine: TTSEngine = .macOSNative
     @Published private(set) var lastError: String?
     
+    // MARK: - Engine Availability
+    @Published private(set) var isGroqConfigured: Bool = false
+    @Published private(set) var isOpenAIConfigured: Bool = false
+    
     // MARK: - Voice Settings
     private var nativeVoice: NativeVoice = .samantha
     private var groqVoice: GroqVoice = .hannah
@@ -39,6 +43,20 @@ class TTSManager: ObservableObject {
         self.piperTTS = PiperTTSService()
 
         logInfo("TTSManager initialized with macOS Native as default engine")
+        
+        // Check availability
+        Task {
+            await checkAvailability()
+        }
+    }
+    
+    private func checkAvailability() async {
+        let groqAvailable = await groqTTS.hasAPIKeys()
+        let openAIAvailable = await openAITTS.hasAPIKey()
+        
+        // Update on main actor
+        self.isGroqConfigured = groqAvailable
+        self.isOpenAIConfigured = openAIAvailable
     }
     
     // MARK: - Engine Selection
@@ -100,6 +118,18 @@ class TTSManager: ObservableObject {
     
     func getOpenAIModel() async -> OpenAITTSModel {
         return await openAITTS.getModel()
+    }
+
+    // MARK: - Reload API Keys
+    
+    func reloadGroqKeys() async {
+        await groqTTS.reloadKeys()
+        await checkAvailability()
+    }
+    
+    func reloadOpenAIKey() async {
+        await openAITTS.reloadKey()
+        await checkAvailability()
     }
     
     // MARK: - Synthesize
@@ -233,16 +263,6 @@ class TTSManager: ObservableObject {
                 return "Model Download Required"
             }
         }
-    }
-    
-    // MARK: - Reload API Keys
-    
-    func reloadGroqKeys() async {
-        await groqTTS.reloadKeys()
-    }
-    
-    func reloadOpenAIKey() async {
-        await openAITTS.reloadKey()
     }
 }
 

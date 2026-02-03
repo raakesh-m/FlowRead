@@ -206,6 +206,7 @@ struct PlayPauseButton: View {
             }
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.05 : 1.0))
         .animation(.spring(response: 0.3), value: isHovered)
         .animation(.spring(response: 0.1), value: isPressed)
@@ -239,6 +240,7 @@ struct ControlButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .disabled(disabled)
         .onHover { isHovered = $0 }
         .scaleEffect(isHovered && !disabled ? 1.1 : 1.0)
@@ -261,7 +263,7 @@ struct SpeedControl: View {
                     .font(.system(size: 14))
                 
                 if !isCompact {
-                    Text(String(format: "%.1fx", appState.playbackSpeed))
+                    Text(String(format: "%.2fx", appState.playbackSpeed))
                         .font(.system(size: 13, weight: .bold, design: .monospaced))
                 }
             }
@@ -278,6 +280,7 @@ struct SpeedControl: View {
             )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovered = $0 }
         .popover(isPresented: $showMenu) {
             SpeedPickerPopover()
@@ -367,6 +370,7 @@ struct UnifiedVoicePicker: View {
             )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovered = $0 }
         .popover(isPresented: $showMenu) {
             UnifiedVoiceMenu()
@@ -382,150 +386,347 @@ struct UnifiedVoiceMenu: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     
+    // Check availability
+    private var isGroqAvailable: Bool {
+        appState.ttsManager.isGroqConfigured
+    }
+    
+    private var isOpenAIAvailable: Bool {
+        appState.ttsManager.isOpenAIConfigured
+    }
+    
+    private var isPiperAvailable: Bool {
+        appState.modelDownloadManager.piperStatus.isDownloaded
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Voice Settings")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color.white.opacity(0.5))
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Image(systemName: "waveform.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
+                Text("Voice Settings")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
             
             ScrollView {
-                VStack(spacing: 4) {
-                    // Groq Section
-                    ConfigSection(title: "Cloud (Groq)", active: appState.selectedTTSEngine == .groqAPI) {
-                        ForEach(GroqVoice.allCases.prefix(4)) { voice in // Showing top 4 for brevity
-                            SimpleVoiceRow(
-                                name: voice.displayName,
-                                desc: voice.gender,
-                                isSelected: appState.selectedTTSEngine == .groqAPI && appState.selectedVoice == voice.rawValue
-                            ) {
-                                appState.updateTTSEngine(.groqAPI)
-                                appState.updateVoice(voice)
-                                // Don't dismiss to allow exploring
-                            }
-                        }
-                    }
-                    
-                    Divider().background(Color.white.opacity(0.1)).padding(.vertical, 4)
-                    
-                    // Piper Section (only if downloaded)
-                    if appState.ttsManager.isEngineReady() { // Simplified check, ideally check model manager
-                        ConfigSection(title: "Local AI (Piper)", active: appState.selectedTTSEngine == .piper) {
-                            ForEach(PiperVoice.allCases) { voice in
-                                SimpleVoiceRow(
-                                    name: voice.displayName,
-                                    desc: "Fast & Offline",
-                                    isSelected: appState.selectedTTSEngine == .piper && appState.selectedPiperVoice == voice
-                                ) {
-                                    appState.updateTTSEngine(.piper)
-                                    appState.updatePiperVoice(voice)
-                                }
-                            }
-                        }
-                        
-                        Divider().background(Color.white.opacity(0.1)).padding(.vertical, 4)
-                    }
-                    
-                    // Native Section
-                    ConfigSection(title: "macOS System", active: appState.selectedTTSEngine == .macOSNative) {
+                VStack(spacing: 8) {
+                    // macOS Native - Always available
+                    VoiceSection(
+                        icon: "laptopcomputer",
+                        title: "macOS System",
+                        subtitle: "Built-in voices",
+                        color: .blue,
+                        isActive: appState.selectedTTSEngine == .macOSNative,
+                        isAvailable: true
+                    ) {
                         ForEach(NativeVoice.allCases) { voice in
-                            SimpleVoiceRow(
+                            VoiceOptionRow(
+                                icon: "person.wave.2.fill",
                                 name: voice.displayName,
-                                desc: "Offline",
-                                isSelected: appState.selectedTTSEngine == .macOSNative && appState.selectedNativeVoice == voice
+                                desc: "Offline • Fast",
+                                isSelected: appState.selectedTTSEngine == .macOSNative && appState.selectedNativeVoice == voice,
+                                color: .blue
                             ) {
                                 appState.updateTTSEngine(.macOSNative)
                                 appState.updateNativeVoice(voice)
                             }
                         }
                     }
+                    
+                    // Piper - Available if downloaded
+                    VoiceSection(
+                        icon: "waveform.path.ecg",
+                        title: "Piper AI",
+                        subtitle: isPiperAvailable ? "Neural voices" : "Not downloaded",
+                        color: .green,
+                        isActive: appState.selectedTTSEngine == .piper,
+                        isAvailable: isPiperAvailable,
+                        configureAction: {
+                            dismiss()
+                            appState.showPreferences = true
+                        }
+                    ) {
+                        if isPiperAvailable {
+                            ForEach(PiperVoice.allCases) { voice in
+                                VoiceOptionRow(
+                                    icon: "brain.head.profile",
+                                    name: voice.displayName,
+                                    desc: "Offline • AI Voice",
+                                    isSelected: appState.selectedTTSEngine == .piper && appState.selectedPiperVoice == voice,
+                                    color: .green
+                                ) {
+                                    appState.updateTTSEngine(.piper)
+                                    appState.updatePiperVoice(voice)
+                                }
+                            }
+                        } else {
+                            EmptyView()
+                        }
+                    }
+                    
+                    // Groq - Available if API key set
+                    VoiceSection(
+                        icon: "bolt.fill",
+                        title: "Groq Cloud",
+                        subtitle: isGroqAvailable ? "Fast cloud TTS" : "API key required",
+                        color: Color(red: 0.69, green: 0.46, blue: 1.0),
+                        isActive: appState.selectedTTSEngine == .groqAPI,
+                        isAvailable: isGroqAvailable,
+                        configureAction: {
+                            dismiss()
+                            appState.showPreferences = true
+                        }
+                    ) {
+                        if isGroqAvailable {
+                            ForEach(GroqVoice.allCases.prefix(4)) { voice in
+                                VoiceOptionRow(
+                                    icon: "cloud.fill",
+                                    name: voice.displayName,
+                                    desc: voice.gender,
+                                    isSelected: appState.selectedTTSEngine == .groqAPI && appState.selectedVoice == voice.rawValue,
+                                    color: Color(red: 0.69, green: 0.46, blue: 1.0)
+                                ) {
+                                    appState.updateTTSEngine(.groqAPI)
+                                    appState.updateVoice(voice)
+                                }
+                            }
+                        } else {
+                            EmptyView()
+                        }
+                    }
+                    
+                    // OpenAI - Available if API key set
+                    VoiceSection(
+                        icon: "sparkles",
+                        title: "OpenAI",
+                        subtitle: isOpenAIAvailable ? "Premium voices" : "API key required",
+                        color: Color(red: 0.4, green: 0.8, blue: 0.6),
+                        isActive: appState.selectedTTSEngine == .openAI,
+                        isAvailable: isOpenAIAvailable,
+                        configureAction: {
+                            dismiss()
+                            appState.showPreferences = true
+                        }
+                    ) {
+                        if isOpenAIAvailable {
+                            ForEach(["alloy", "echo", "fable", "onyx"], id: \.self) { voice in
+                                VoiceOptionRow(
+                                    icon: "waveform",
+                                    name: voice.capitalized,
+                                    desc: "High Quality",
+                                    isSelected: appState.selectedTTSEngine == .openAI,
+                                    color: Color(red: 0.4, green: 0.8, blue: 0.6)
+                                ) {
+                                    appState.updateTTSEngine(.openAI)
+                                }
+                            }
+                        } else {
+                            EmptyView()
+                        }
+                    }
                 }
                 .padding(.horizontal, 8)
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
             }
-            .frame(height: 300)
+            .frame(height: 340)
             
-            // Footer to full settings
+            // Footer
             Button(action: {
                 dismiss()
                 appState.showPreferences = true
             }) {
                 HStack {
                     Image(systemName: "gearshape.fill")
-                    Text("More Settings...")
+                    Text("All Settings...")
                 }
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color(red: 0.36, green: 0.67, blue: 1.0))
                 .frame(maxWidth: .infinity)
                 .padding(10)
                 .background(Color.white.opacity(0.05))
+                .cornerRadius(8)
             }
             .buttonStyle(.plain)
+            .focusable(false)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 12)
         }
-        .frame(width: 260)
-        .background(Color(red: 0.12, green: 0.14, blue: 0.19))
+        .frame(width: 280)
+        .background(Color(red: 0.10, green: 0.12, blue: 0.16))
     }
 }
 
-struct ConfigSection<Content: View>: View {
+// MARK: - Voice Section
+
+struct VoiceSection<Content: View>: View {
+    let icon: String
     let title: String
-    let active: Bool
+    let subtitle: String
+    let color: Color
+    let isActive: Bool
+    let isAvailable: Bool
+    var configureAction: (() -> Void)? = nil
     let content: () -> Content
+    
+    init(icon: String, title: String, subtitle: String, color: Color, isActive: Bool, isAvailable: Bool, configureAction: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.color = color
+        self.isActive = isActive
+        self.isAvailable = isAvailable
+        self.configureAction = configureAction
+        self.content = content
+    }
+    
+    @State private var isExpanded: Bool = true
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(active ? .white : Color.white.opacity(0.6))
-                
-                Spacer()
-                
-                if active {
-                    Circle().fill(Color.green).frame(width: 6, height: 6)
+            // Header
+            Button(action: { 
+                if isAvailable {
+                    withAnimation(.spring(response: 0.3)) {
+                        isExpanded.toggle()
+                    }
+                } else {
+                    configureAction?()
                 }
+            }) {
+                HStack(spacing: 10) {
+                    // Icon
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(isAvailable ? 0.2 : 0.1))
+                            .frame(width: 28, height: 28)
+                        
+                        Image(systemName: icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(isAvailable ? color : color.opacity(0.5))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(isAvailable ? .white : .white.opacity(0.5))
+                        
+                        Text(subtitle)
+                            .font(.system(size: 10))
+                            .foregroundColor(isAvailable ? color.opacity(0.8) : .orange.opacity(0.8))
+                    }
+                    
+                    Spacer()
+                    
+                    if !isAvailable {
+                        // Configure button
+                        Text("Configure")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.15))
+                            .cornerRadius(4)
+                    } else {
+                        // Active indicator + expand
+                        HStack(spacing: 6) {
+                            if isActive {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 6, height: 6)
+                            }
+                            
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isActive ? color.opacity(0.1) : Color.white.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isActive ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            
-            content()
+            .buttonStyle(.plain)
+            .focusable(false)
+
+            // Content (voices)
+            if isAvailable && isExpanded {
+                content()
+                    .padding(.leading, 38)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 }
 
-struct SimpleVoiceRow: View {
+// MARK: - Voice Option Row
+
+struct VoiceOptionRow: View {
+    let icon: String
     let name: String
     let desc: String
     let isSelected: Bool
+    let color: Color
     let action: () -> Void
+    
     @State private var isHovered = false
     
     var body: some View {
         Button(action: action) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(name).font(.system(size: 12, weight: .medium)).foregroundColor(.white)
-                    Text(desc).font(.system(size: 10)).foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? color : .white.opacity(0.5))
+                    .frame(width: 16)
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(isSelected ? .white : .white.opacity(0.8))
+                    
+                    Text(desc)
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.4))
                 }
+                
                 Spacer()
+                
                 if isSelected {
-                    Image(systemName: "checkmark").font(.system(size: 10)).foregroundColor(.blue)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(color)
                 }
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.blue.opacity(0.2) : (isHovered ? Color.white.opacity(0.05) : Color.clear)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? color.opacity(0.15) : (isHovered ? Color.white.opacity(0.05) : Color.clear))
+            )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovered = $0 }
     }
 }
+
 // MARK: - Speed Picker Popover
 
 struct SpeedPickerPopover: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
-    
+
     var body: some View {
         VStack(spacing: 4) {
             ForEach(AppState.speedPresets, id: \.self) { speed in
@@ -535,12 +736,12 @@ struct SpeedPickerPopover: View {
                     dismiss()
                 }) {
                     HStack {
-                        Text("\(speed, specifier: "%.1f")×")
+                        Text(String(format: "%.2f×", speed))
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundColor(appState.playbackSpeed == speed ? .white : Color.white.opacity(0.7))
-                        
+
                         Spacer()
-                        
+
                         if appState.playbackSpeed == speed {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 12))
@@ -555,6 +756,7 @@ struct SpeedPickerPopover: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
             }
         }
         .padding(8)

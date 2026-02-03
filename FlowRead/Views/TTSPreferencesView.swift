@@ -73,7 +73,8 @@ struct OnlineSettingsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .groqAPI ? vibrantBlue.opacity(0.3) : Color.clear, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
-                    
+                    .focusable(false)
+
                     // OpenAI TTS
                     Button(action: {
                         appState.updateTTSEngine(.openAI)
@@ -123,9 +124,10 @@ struct OnlineSettingsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(appState.selectedTTSEngine == .openAI ? Color(red: 0.4, green: 0.8, blue: 0.6).opacity(0.3) : Color.clear, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
             }
-            
+
             // 3. API Keys Management
             if appState.selectedTTSEngine == .groqAPI {
                 APIKeyManagementView()
@@ -154,10 +156,14 @@ struct OnlineSettingsView: View {
 struct OfflineSettingsView: View {
     @EnvironmentObject var appState: AppState
     @ObservedObject var downloadManager: ModelDownloadManager
+    @StateObject private var piperSetup = PiperDependencyManager.shared
+    @State private var showPiperSetupSheet = false
+    @State private var isSettingUpPiper = false
+    @State private var setupError: String? = nil
     
     let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
     let vibrantGreen = Color(red: 0.30, green: 0.78, blue: 0.47)
-     let vibrantOrange = Color(red: 1.0, green: 0.62, blue: 0.04)
+    let vibrantOrange = Color(red: 1.0, green: 0.62, blue: 0.04)
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -184,12 +190,12 @@ struct OfflineSettingsView: View {
                             }
                         },
                         downloadAction: {
-                            Task {
-                                await downloadManager.downloadPiperPack()
-                            }
+                            // Show beautiful setup sheet instead of direct download
+                            showPiperSetupSheet = true
                         },
                         cancelAction: {
                             downloadManager.cancelPiperPackDownload()
+                            isSettingUpPiper = false
                         },
                         deleteAction: {
                             downloadManager.deletePiperPack()
@@ -211,9 +217,23 @@ struct OfflineSettingsView: View {
         .onAppear {
             downloadManager.checkExistingModels()
         }
+        .sheet(isPresented: $showPiperSetupSheet) {
+            PiperSetupSheet(
+                isPresented: $showPiperSetupSheet,
+                isSettingUp: $isSettingUpPiper,
+                setupError: $setupError,
+                piperSetup: piperSetup,
+                downloadManager: downloadManager
+            )
+        }
     }
     
     private var downloadStatusForPiper: TTSEngineStatus {
+        if isSettingUpPiper && !downloadManager.piperStatus.isDownloading {
+            // Show as downloading during dependency setup
+            return .downloading(progress: 0.1, downloaded: 0, total: 1)
+        }
+        
         switch downloadManager.piperStatus {
         case .notDownloaded:
             return .needsDownload
@@ -225,6 +245,383 @@ struct OfflineSettingsView: View {
             return .deleting
         case .failed(let error):
             return .error(message: error)
+        }
+    }
+}
+
+// MARK: - Beautiful Piper Setup Sheet
+
+struct PiperSetupSheet: View {
+    @Binding var isPresented: Bool
+    @Binding var isSettingUp: Bool
+    @Binding var setupError: String?
+    @ObservedObject var piperSetup: PiperDependencyManager
+    @ObservedObject var downloadManager: ModelDownloadManager
+    
+    @State private var currentStep: SetupStep = .info
+    
+    enum SetupStep {
+        case info
+        case installing
+        case downloading
+        case complete
+        case error
+    }
+    
+    let vibrantBlue = Color(red: 0.36, green: 0.67, blue: 1.0)
+    let vibrantGreen = Color(red: 0.30, green: 0.78, blue: 0.47)
+    let vibrantPurple = Color(red: 0.69, green: 0.46, blue: 1.0)
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with gradient
+            ZStack {
+                LinearGradient(
+                    colors: [vibrantBlue, vibrantPurple],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                
+                VStack(spacing: 12) {
+                    Image(systemName: "cpu.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white)
+                    
+                    Text("Piper TTS")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Local AI Voice • Free Forever")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                .padding(.vertical, 32)
+            }
+            .frame(height: 180)
+            
+            // Content
+            VStack(spacing: 20) {
+                switch currentStep {
+                case .info:
+                    infoContent
+                case .installing:
+                    installingContent
+                case .downloading:
+                    downloadingContent
+                case .complete:
+                    completeContent
+                case .error:
+                    errorContent
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(Color(white: 0.12))
+        }
+        .frame(width: 420)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .onChange(of: downloadManager.piperStatus) { newStatus in
+            if case .downloaded = newStatus {
+                currentStep = .complete
+                isSettingUp = false
+            }
+        }
+    }
+    
+    // MARK: - Info Content (Initial State)
+    private var infoContent: some View {
+        VStack(spacing: 20) {
+            // Benefits
+            VStack(alignment: .leading, spacing: 12) {
+                benefitRow(icon: "infinity", title: "Unlimited & Free", subtitle: "No API costs, no limits, ever")
+                benefitRow(icon: "wifi.slash", title: "Works Offline", subtitle: "No internet needed after setup")
+                benefitRow(icon: "lock.shield", title: "100% Private", subtitle: "All processing stays on your Mac")
+                benefitRow(icon: "bolt.fill", title: "Fast & Lightweight", subtitle: "Optimized for instant response")
+            }
+            
+            Divider().background(Color.white.opacity(0.1))
+            
+            // Storage Info
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("One-time download")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                    Text("~150 MB total • 2 voices included")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(white: 0.6))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "externaldrive.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(vibrantBlue)
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(10)
+            
+            // Buttons
+            HStack(spacing: 12) {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(Color(white: 0.7))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(10)
+                
+                Button(action: startSetup) {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                        Text("Install Piper")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(LinearGradient(colors: [vibrantBlue, vibrantPurple], startPoint: .leading, endPoint: .trailing))
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+            }
+        }
+    }
+    
+    // MARK: - Installing Content
+    private var installingContent: some View {
+        VStack(spacing: 20) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .padding()
+            
+            // Show different text based on current status
+            if case .installingPython = piperSetup.status {
+                Text("Installing Python...")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text("Please complete the Python installer\n if a window appears.")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.6))
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("Setting up Piper TTS...")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text("Installing required components.\nThis only happens once.")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.6))
+                    .multilineTextAlignment(.center)
+            }
+            
+            // Log view
+            if !piperSetup.logs.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(piperSetup.logs.suffix(5), id: \.self) { log in
+                            Text(log)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(Color(white: 0.5))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 60)
+                .padding(8)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(8)
+            }
+        }
+    }
+    
+    // MARK: - Downloading Content
+    private var downloadingContent: some View {
+        VStack(spacing: 20) {
+            if case .downloading(let progress, let downloaded, let total) = downloadManager.piperStatus {
+                VStack(spacing: 12) {
+                    // Progress circle
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.1), lineWidth: 8)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(LinearGradient(colors: [vibrantBlue, vibrantGreen], startPoint: .topLeading, endPoint: .bottomTrailing), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        
+                        Text("\(Int(progress * 100))%")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 100, height: 100)
+                    
+                    Text("Downloading voice models...")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Text("\(ModelDownloadManager.formatBytes(downloaded)) / \(ModelDownloadManager.formatBytes(total))")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color(white: 0.6))
+                }
+            } else {
+                ProgressView()
+                Text("Preparing download...")
+                    .foregroundColor(Color(white: 0.6))
+            }
+            
+            Button("Cancel") {
+                downloadManager.cancelPiperPackDownload()
+                isSettingUp = false
+                isPresented = false
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .foregroundColor(.red.opacity(0.8))
+            .padding(.top, 8)
+        }
+    }
+    
+    // MARK: - Complete Content
+    private var completeContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(vibrantGreen)
+            
+            Text("All Set!")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
+            
+            Text("Piper TTS is ready to use.\nEnjoy unlimited free text-to-speech!")
+                .font(.system(size: 14))
+                .foregroundColor(Color(white: 0.7))
+                .multilineTextAlignment(.center)
+            
+            Button("Done") {
+                isPresented = false
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(vibrantGreen)
+            .cornerRadius(10)
+        }
+    }
+    
+    // MARK: - Error Content
+    private var errorContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundColor(.orange)
+            
+            Text("Setup Incomplete")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+            
+            if let error = setupError {
+                Text(error)
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.6))
+                    .multilineTextAlignment(.center)
+            }
+            
+            VStack(spacing: 8) {
+                Text("Python 3 is required for Piper TTS.\nYou can retry to install it automatically.")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.5))
+                    .multilineTextAlignment(.center)
+            }
+            
+            HStack(spacing: 12) {
+                Button("Close") {
+                    isPresented = false
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(Color(white: 0.7))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(10)
+                
+                Button("Retry") {
+                    currentStep = .info
+                    setupError = nil
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(vibrantBlue)
+                .cornerRadius(10)
+            }
+        }
+    }
+    
+    // MARK: - Helper Views
+    private func benefitRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(vibrantBlue)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.6))
+            }
+            
+            Spacer()
+        }
+    }
+    
+    // MARK: - Setup Flow
+    private func startSetup() {
+        isSettingUp = true
+        currentStep = .installing
+        
+        Task {
+            // Step 1: Check and install dependencies
+            // This will automatically:
+            // - Check if Python is installed
+            // - Download and install Python if missing (shows macOS installer)
+            // - Install piper-tts package
+            let dependenciesReady = await piperSetup.ensureReady()
+            
+            if !dependenciesReady {
+                switch piperSetup.status {
+                case .pythonNotFound:
+                    setupError = "Python 3 installation was cancelled or failed."
+                case .failed(let error):
+                    setupError = error
+                default:
+                    setupError = "Failed to install required components."
+                }
+                currentStep = .error
+                isSettingUp = false
+                return
+            }
+            
+            // Step 2: Download models
+            currentStep = .downloading
+            await downloadManager.downloadPiperPack()
+            
+            // Status change will trigger completion via onChange
         }
     }
 }
@@ -291,6 +688,7 @@ struct APIKeyManagementView: View {
                                     .foregroundColor(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
+                            .focusable(false)
                         }
                     }
                 }
@@ -309,7 +707,8 @@ struct APIKeyManagementView: View {
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-                
+                .focusable(false)
+
                 // Action row
                 HStack {
                     Button(action: { showKeys.toggle() }) {
@@ -318,7 +717,8 @@ struct APIKeyManagementView: View {
                             .foregroundColor(Color.white.opacity(0.7))
                     }
                     .buttonStyle(.plain)
-                    
+                    .focusable(false)
+
                     Spacer()
                     
                     Button(action: saveAPIKeys) {
@@ -331,8 +731,9 @@ struct APIKeyManagementView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
-                
+
                 if !statusMessage.isEmpty {
                     Text(statusMessage)
                         .font(.system(size: 11))
@@ -562,24 +963,24 @@ struct TTSEngineRow: View {
         case .ready:
             if isSelected { Image(systemName: "checkmark.circle.fill").foregroundColor(vibrantGreen).font(.system(size: 18)) }
             if let deleteAction = deleteAction, engine.requiresDownload {
-                Button(action: deleteAction) { Image(systemName: "trash").font(.system(size: 12)).foregroundColor(.red.opacity(0.7)) }.buttonStyle(.plain).padding(.leading, 8)
+                Button(action: deleteAction) { Image(systemName: "trash").font(.system(size: 12)).foregroundColor(.red.opacity(0.7)) }.buttonStyle(.plain).focusable(false).padding(.leading, 8)
             }
         case .needsDownload:
             if let downloadAction = downloadAction {
                 Button(action: downloadAction) {
                     HStack(spacing: 4) { Image(systemName: "arrow.down.circle.fill"); Text("Download \(engine.downloadSizeFormatted)") }
                         .font(.system(size: 11, weight: .medium)).foregroundColor(.white).padding(6).background(vibrantBlue).cornerRadius(6)
-                }.buttonStyle(.plain)
+                }.buttonStyle(.plain).focusable(false)
             }
         case .downloading(_, _, _):
             if let cancelAction = cancelAction {
-                Button(action: cancelAction) { Image(systemName: "xmark.circle.fill").foregroundColor(.red.opacity(0.8)) }.buttonStyle(.plain)
+                Button(action: cancelAction) { Image(systemName: "xmark.circle.fill").foregroundColor(.red.opacity(0.8)) }.buttonStyle(.plain).focusable(false)
             }
         case .deleting:
             ProgressView().scaleEffect(0.5)
         case .error(let message):
             VStack(alignment: .trailing) { Text("Error").font(.system(size: 10, weight: .bold)).foregroundColor(.red); Text(message).font(.system(size: 9)).foregroundColor(.red.opacity(0.8)).lineLimit(1) }
-            if let downloadAction = downloadAction { Button("Retry", action: downloadAction).font(.system(size: 10)).padding(4).background(vibrantOrange).cornerRadius(4).buttonStyle(.plain) }
+            if let downloadAction = downloadAction { Button("Retry", action: downloadAction).font(.system(size: 10)).padding(4).background(vibrantOrange).cornerRadius(4).buttonStyle(.plain).focusable(false) }
         }
     }
 }
@@ -609,7 +1010,7 @@ struct VoiceOptionButton: View {
             .padding(.horizontal, 8).padding(.vertical, 10).frame(maxWidth: .infinity)
             .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color(red: 0.36, green: 0.67, blue: 1.0) : Color.white.opacity(isHovered ? 0.1 : 0.05)))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.15), lineWidth: 1))
-        }.buttonStyle(.plain).onHover { isHovered = $0 }
+        }.buttonStyle(.plain).focusable(false).onHover { isHovered = $0 }
     }
 }
 
@@ -675,9 +1076,10 @@ struct OpenAIKeyManagementView: View {
                             .foregroundColor(Color.white.opacity(0.7))
                     }
                     .buttonStyle(.plain)
-                    
+                    .focusable(false)
+
                     Spacer()
-                    
+
                     Button(action: saveAPIKey) {
                         Label("Save Key", systemImage: "checkmark.circle")
                             .font(.system(size: 12, weight: .semibold))
@@ -688,8 +1090,9 @@ struct OpenAIKeyManagementView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
-                
+
                 if !statusMessage.isEmpty {
                     Text(statusMessage)
                         .font(.system(size: 11))
@@ -831,6 +1234,7 @@ struct OpenAIVoiceButton: View {
             )
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovered = $0 }
     }
 }

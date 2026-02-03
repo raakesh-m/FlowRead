@@ -50,7 +50,7 @@ class AppState: ObservableObject {
     private var audioCache: [Int: Data] = [:]  // Maps chunk index to audio data
     
     // MARK: - Speed Presets
-    static let speedPresets: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    static let speedPresets: [Double] = [0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.75, 2.0]
     
     init() {
         logInfo("AppState initialization starting...")

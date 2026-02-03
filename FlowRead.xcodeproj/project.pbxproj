@@ -27,6 +27,13 @@
 		971B4A24B18D907AF215F3A2 /* ModelDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */; };
 		F8DC439F997A710446E10AFC /* TTSPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EE0496BB929EAA145A6535A /* TTSPreferencesView.swift */; };
 		FEC241339DCEF75791F86047 /* TTSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C54D0097EC75A00060E022 /* TTSManager.swift */; };
+		PIPDEP001 /* PiperDependencyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPDEP100 /* PiperDependencyManager.swift */; };
+		OAITTS001 /* OpenAITTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAITTS100 /* OpenAITTSService.swift */; };
+		PIPTTS001 /* PiperTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PIPTTS100 /* PiperTTSService.swift */; };
+		LOGGER001 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = LOGGER100 /* Logger.swift */; };
+		TTSERR001 /* TTSErrorBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTSERR100 /* TTSErrorBanner.swift */; };
+		DIAGNS001 /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DIAGNS100 /* DiagnosticsView.swift */; };
+		ERRVEW001 /* ErrorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERRVEW100 /* ErrorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +60,13 @@
 		A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ModelDownloadManager.swift; path = FlowRead/Services/ModelDownloadManager.swift; sourceTree = SOURCE_ROOT; };
 		D74F43008B5424B71F636657 /* TTSEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSEngine.swift; path = FlowRead/Models/TTSEngine.swift; sourceTree = SOURCE_ROOT; };
 		F3C54D0097EC75A00060E022 /* TTSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSManager.swift; path = FlowRead/Services/TTSManager.swift; sourceTree = SOURCE_ROOT; };
+		PIPDEP100 /* PiperDependencyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PiperDependencyManager.swift; path = FlowRead/Services/PiperDependencyManager.swift; sourceTree = SOURCE_ROOT; };
+		OAITTS100 /* OpenAITTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OpenAITTSService.swift; path = FlowRead/Services/OpenAITTSService.swift; sourceTree = SOURCE_ROOT; };
+		PIPTTS100 /* PiperTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PiperTTSService.swift; path = FlowRead/Services/PiperTTSService.swift; sourceTree = SOURCE_ROOT; };
+		LOGGER100 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Logger.swift; path = FlowRead/Services/Logger.swift; sourceTree = SOURCE_ROOT; };
+		TTSERR100 /* TTSErrorBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TTSErrorBanner.swift; path = FlowRead/Views/TTSErrorBanner.swift; sourceTree = SOURCE_ROOT; };
+		DIAGNS100 /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DiagnosticsView.swift; path = FlowRead/Views/DiagnosticsView.swift; sourceTree = SOURCE_ROOT; };
+		ERRVEW100 /* ErrorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ErrorView.swift; path = FlowRead/Views/ErrorView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +132,10 @@
 				A80446F88FCC2BE9E6645FE4 /* ModelDownloadManager.swift */,
 				92D14BB5B9CC75EFAA2DD74D /* NativeTTSService.swift */,
 				F3C54D0097EC75A00060E022 /* TTSManager.swift */,
+				PIPDEP100 /* PiperDependencyManager.swift */,
+				OAITTS100 /* OpenAITTSService.swift */,
+				PIPTTS100 /* PiperTTSService.swift */,
+				LOGGER100 /* Logger.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -131,6 +149,9 @@
 				112,
 				113,
 				0EE0496BB929EAA145A6535A /* TTSPreferencesView.swift */,
+				TTSERR100 /* TTSErrorBanner.swift */,
+				DIAGNS100 /* DiagnosticsView.swift */,
+				ERRVEW100 /* ErrorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -231,6 +252,13 @@
 				3A004CACA3432E056EFC37F0 /* NativeTTSService.swift in Sources */,
 				FEC241339DCEF75791F86047 /* TTSManager.swift in Sources */,
 				F8DC439F997A710446E10AFC /* TTSPreferencesView.swift in Sources */,
+				PIPDEP001 /* PiperDependencyManager.swift in Sources */,
+				OAITTS001 /* OpenAITTSService.swift in Sources */,
+				PIPTTS001 /* PiperTTSService.swift in Sources */,
+				LOGGER001 /* Logger.swift in Sources */,
+				TTSERR001 /* TTSErrorBanner.swift in Sources */,
+				DIAGNS001 /* DiagnosticsView.swift in Sources */,
+				ERRVEW001 /* ErrorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
