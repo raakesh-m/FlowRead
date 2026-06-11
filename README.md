@@ -23,13 +23,14 @@
 
 ### Core Functionality
 - **📖 Native PDF Reading** — Load and read PDFs with a clean, distraction-free interface
-- **🎧 Text-to-Speech** — Listen to documents using Groq's Orpheus TTS with 6 professional voices
+- **🎧 Multi-Engine Text-to-Speech** — Choose from 4 TTS engines: macOS Native, Groq API, OpenAI TTS, and Piper (local AI)
 - **✨ Synchronized Highlighting** — See exactly which sentence is being read in real-time
 - **📜 Smart Auto-Scroll** — View intelligently follows along, pauses when you scroll manually, and resumes on the next sentence
 
 ### Audio & Playback
 - **🎚️ Variable Speed** — Adjust playback from 0.5x to 2.0x
-- **🎤 Voice Selection** — Choose from 6 distinct voices (Autumn, Diana, Hannah, Austin, Daniel, Troy)
+- **🎤 Voice Selection** — Pick from each engine's voice lineup (see [TTS Engines & Voices](#-tts-engines--voices))
+- **🔀 Switch Engines Anytime** — Change engines on the fly; FlowRead re-optimizes text chunking and restores your position
 - **⏯️ Full Playback Control** — Play, pause, stop, skip forward/backward
 - **🔊 TTS Toggle** — Switch between audio+visual or visual-only mode
 
@@ -51,7 +52,11 @@
 
 - macOS 13.0 (Ventura) or later
 - Xcode 15.0+ (for building from source)
-- Groq API key(s) for Text-to-Speech functionality
+- **No API key required** to get started — the macOS Native engine works offline out of the box
+- Optional, depending on the engine you choose:
+  - **Groq API key(s)** for the Groq engine
+  - **OpenAI API key** for the OpenAI engine
+  - **Python 3** + a one-time ~126 MB model download for the Piper engine
 
 ---
 
@@ -63,7 +68,7 @@
 2. Open the DMG file
 3. Drag FlowRead to your Applications folder
 4. Open FlowRead
-5. Configure your Groq API keys in Preferences (⌘,)
+5. Start reading immediately with the **macOS Native** engine, or open Preferences (⌘,) to pick another TTS engine and add API keys
 
 ### Building from Source
 
@@ -85,21 +90,30 @@ chmod +x run-debug.sh
 
 ## 🔑 API Key Configuration
 
-FlowRead requires Groq API keys for Text-to-Speech. You can configure up to 5 keys for automatic load balancing and failover.
+API keys are **only needed for the cloud engines** (Groq and OpenAI). The macOS Native and Piper engines run entirely on-device.
+
+- **Groq** supports up to 5 keys for automatic load balancing and failover (handy for rate limits).
+- **OpenAI** uses a single key.
+
+Keys are loaded in this order of precedence: **environment variables → config file → in-app Preferences**.
 
 ### Option 1: Environment Variables
 
 ```bash
-export GROQ_API_KEY="your_key_here"
-# Or for multiple keys (recommended for rate limit handling):
+# Groq — single key:
+export GROQ_API_KEY="gsk_your_key_here"
+# Or multiple keys (recommended for rate-limit handling):
 export GROQ_API_KEY_1="key_1"
 export GROQ_API_KEY_2="key_2"
 export GROQ_API_KEY_3="key_3"
+
+# OpenAI:
+export OPENAI_API_KEY="sk_your_key_here"
 ```
 
 ### Option 2: Config File
 
-Create `~/.flowread/api_keys.json`:
+Create `~/.flowread/api_keys.json` (`~/.config/flowread/api_keys.json` also works):
 
 ```json
 {
@@ -107,7 +121,8 @@ Create `~/.flowread/api_keys.json`:
     "gsk_your_first_key",
     "gsk_your_second_key",
     "gsk_your_third_key"
-  ]
+  ],
+  "openai_api_key": "sk_your_key_here"
 }
 ```
 
@@ -155,9 +170,31 @@ FlowRead features comprehensive keyboard controls inspired by media players like
 
 ---
 
-## 🎤 Available Voices
+## 🎤 TTS Engines & Voices
 
-FlowRead uses Groq's Orpheus TTS model with 6 professionally-trained voices:
+FlowRead ships with **4 interchangeable TTS engines**. Switch between them anytime in Preferences (⌘,) → TTS tab — FlowRead automatically re-optimizes the text chunking for the selected engine and keeps your reading position.
+
+| Engine | Type | Cost | API Key | Download | Quality |
+|--------|------|------|---------|----------|---------|
+| **macOS Native** | On-device, offline | Free | — | — | Good |
+| **Groq API** | Cloud (Orpheus) | Per Groq pricing | Required | — | Excellent |
+| **OpenAI TTS** | Cloud | $15–30 / 1M chars | Required | — | Excellent |
+| **Piper TTS** | On-device AI (local) | Free | — | ~126 MB | Very Good |
+
+> **Default:** FlowRead starts with the **macOS Native** engine so it works immediately with no setup. If a Piper synthesis ever fails, FlowRead automatically falls back to macOS Native.
+
+### macOS Native
+
+Built into macOS via `NSSpeechSynthesizer` — works fully offline, zero setup.
+
+| Voice | Gender | Accent | Notes |
+|-------|--------|--------|-------|
+| **Samantha** | Female | American | Clear |
+| **Daniel** | Male | British | Premium |
+
+### Groq API
+
+Groq's **Orpheus** TTS model (`canopylabs/orpheus-v1-english`) with 6 professionally-trained voices.
 
 | Voice | Gender | Description |
 |-------|--------|-------------|
@@ -167,6 +204,28 @@ FlowRead uses Groq's Orpheus TTS model with 6 professionally-trained voices:
 | **Austin** | Male | Deep & confident |
 | **Daniel** | Male | Friendly & expressive |
 | **Troy** | Male | Strong & articulate |
+
+### OpenAI TTS
+
+OpenAI's cloud TTS with selectable model quality (`tts-1` standard, `tts-1-hd` high quality) and 6 voices.
+
+| Voice | Gender | Description |
+|-------|--------|-------------|
+| **Alloy** | Neutral | Versatile & balanced |
+| **Echo** | Male | Warm & conversational |
+| **Fable** | Neutral | Expressive & dynamic |
+| **Onyx** | Male | Deep & authoritative |
+| **Nova** | Female | Friendly & upbeat |
+| **Shimmer** | Female | Clear & optimistic |
+
+### Piper TTS
+
+Lightweight, fully-local neural TTS. Models run through a Python backend (keeping the app itself tiny). Requires Python 3 and a one-time model download (~63 MB per voice) pulled from the [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) collection on Hugging Face.
+
+| Voice | Gender | Model | Description |
+|-------|--------|-------|-------------|
+| **Amy** | Female | `en_US-amy-medium` | Clear, professional |
+| **Ryan** | Male | `en_US-ryan-medium` | Warm, friendly |
 
 ---
 
@@ -179,19 +238,31 @@ FlowRead/
 │   ├── FlowReadApp.swift        # App entry point & menu commands
 │   ├── Models/
 │   │   ├── AppState.swift       # Central state management
+│   │   ├── TTSEngine.swift      # TTS engine definitions & Piper voices
 │   │   ├── TextChunk.swift      # Text chunk model
 │   │   └── PersistedState.swift # Session persistence model
 │   ├── Services/
-│   │   ├── GroqTTSService.swift      # TTS API with key rotation
-│   │   ├── AudioPlaybackManager.swift # AVFoundation audio
-│   │   ├── PDFTextProcessor.swift    # Smart text extraction
-│   │   └── PersistenceManager.swift  # Local storage
+│   │   ├── TTSManager.swift            # Unified coordinator for all engines
+│   │   ├── NativeTTSService.swift      # macOS NSSpeechSynthesizer engine
+│   │   ├── GroqTTSService.swift        # Groq API with key rotation
+│   │   ├── OpenAITTSService.swift      # OpenAI TTS API
+│   │   ├── PiperTTSService.swift       # Local Piper (Python backend)
+│   │   ├── ModelDownloadManager.swift  # Piper model downloads
+│   │   ├── PiperDependencyManager.swift # Piper/Python dependency checks
+│   │   ├── AudioPlaybackManager.swift  # AVFoundation audio
+│   │   ├── PDFTextProcessor.swift      # Smart text extraction & chunking
+│   │   ├── PersistenceManager.swift    # Local storage
+│   │   └── Logger.swift                # Logging
 │   ├── Views/
 │   │   ├── ContentView.swift         # Main container
 │   │   ├── MainReadingView.swift     # Reading interface
 │   │   ├── ReadingPane.swift         # Smart auto-scrolling text
 │   │   ├── PlaybackControlBar.swift  # Control center
-│   │   └── PreferencesView.swift     # Settings tabs
+│   │   ├── PreferencesView.swift     # Settings tabs
+│   │   ├── TTSPreferencesView.swift  # Engine & voice selection
+│   │   ├── TTSErrorBanner.swift      # Inline TTS error display
+│   │   ├── DiagnosticsView.swift     # Diagnostics
+│   │   └── ErrorView.swift           # Error display
 │   └── Assets.xcassets/              # Colors & icons
 ├── docs/
 │   └── ARCHITECTURE.md          # Technical documentation
@@ -251,8 +322,12 @@ This will:
 - **Smart chapter detection** — Recognizes Roman numerals (I, II, III) as chapter markers and converts them to spoken form
 
 ### 2. Text-to-Speech
-- Sends text chunks to **Groq's Orpheus API**
-- **Round-robin key rotation** with automatic failover
+- A unified **`TTSManager`** routes synthesis to the selected engine:
+  - **macOS Native** — `NSSpeechSynthesizer`, fully offline
+  - **Groq** — Orpheus API with **round-robin key rotation** and automatic failover
+  - **OpenAI** — cloud TTS with selectable `tts-1` / `tts-1-hd` models
+  - **Piper** — local neural model run via a Python backend (auto-falls back to macOS Native on failure)
+- **Adaptive chunking** — Text is split to respect each engine's limits (e.g. Groq's ~200-char cap, Piper's phoneme limit) while breaking at natural sentence boundaries
 - **Audio caching** — Pre-fetches upcoming sentences for seamless playback
 
 ### 3. Audio Playback
@@ -275,7 +350,8 @@ This will:
 
 - **No telemetry or analytics** — Zero data collection
 - **No cloud storage** — All data stored locally in Application Support
-- **Minimal network usage** — Only Groq TTS API calls
+- **Offline-capable** — macOS Native and Piper engines need no network at all
+- **Minimal network usage** — Cloud engines (Groq/OpenAI) only contact their own TTS endpoints
 - **API keys secured** — Stored locally, never logged or transmitted
 - **Sandboxed** — Full macOS app sandbox for security
 - **Security-scoped bookmarks** — Secure file access that persists across launches
@@ -291,7 +367,9 @@ MIT License — See [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgments
 
 - [Groq](https://groq.com) for their excellent Orpheus TTS API
-- Apple's PDFKit, AVFoundation, and NaturalLanguage frameworks
+- [OpenAI](https://openai.com) for their TTS API
+- [Piper](https://github.com/rhasspy/piper) and the [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) project for local neural TTS
+- Apple's PDFKit, AVFoundation, NaturalLanguage, and AppKit speech frameworks
 - The Swift and SwiftUI communities
 
 ---
